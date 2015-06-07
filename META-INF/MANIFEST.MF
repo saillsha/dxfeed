@@ -1,0 +1,11 @@
+Manifest-Version: 1.0
+Implementation-Vendor: Devexperts
+Implementation-Title: dxfeed-samples
+Implementation-Version: 3.200
+Built-By: dxbuild
+Build-Jdk: 1.7.0_55
+Class-Path: qds.jar dxlib.jar dxfeed-api.jar qds-file.jar dxfeed-ondem
+ and.jar
+Created-By: Apache Maven 3.0.5
+Archiver-Version: Plexus Archiver
+
