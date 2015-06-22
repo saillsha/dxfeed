@@ -19,6 +19,7 @@ public class DXFeedUtils {
     }
     
     public static TimeAndSale parseTrade(String line){
+    	if(line == null) return null;
     	String[] fields = line.split(""+DELIM);
     	if(fields.length != NUM_FIELDS) return null;
 
