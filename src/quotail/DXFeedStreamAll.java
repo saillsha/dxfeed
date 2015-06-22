@@ -17,6 +17,7 @@ import com.dxfeed.event.market.TimeAndSale;
 import com.dxfeed.api.osub.WildcardSymbol;
 import com.devexperts.qd.qtp.QDEndpoint;
 
+import org.apache.commons.cli.*;
 
 //kafka imports
 import kafka.javaapi.producer.Producer;
@@ -38,60 +39,106 @@ public class DXFeedStreamAll{
 		props.put("metadata.broker.list", "localhost:9092");
 		props.put("serializer.class", "kafka.serializer.DefaultEncoder");
 		props.put("partitioner.class", "quotail.TickerPartitioner");
-		props.put("request.required.acks", "1");
-		
+		props.put("request.required.acks", "1");		
 		ProducerConfig config = new ProducerConfig(props);
 		producer = new Producer<byte[], byte[]>(config);
-		if(args.length == 1){
-			new DXFeedStreamAll(Mode.FILE, args[0], 0);
-		}
-		else if(args.length == 2){
-			new DXFeedStreamAll(Mode.TIMESERIES, args[0], Long.parseLong(args[1]));
-		}
-		else{
-			new DXFeedStreamAll(Mode.REALTIME, null, 0);
+
+		processOptions(args);
+	}
+	
+	static void processOptions(String[] args){
+		Options options = new Options();
+		Option filename = OptionBuilder.withArgName("file").hasArg()
+				.withDescription("the file path from which to read trades")
+				.create("file");
+		Option contracts = OptionBuilder.withArgName("contracts").hasArg()
+				.withDescription("command separated list of contracts to subscribe to when in time series mode")
+				.create("contracts");
+		Option fromtime = OptionBuilder.withArgName("fromtime").hasArg()
+				.withDescription("UNIX timestamp from which to read timeseries options").create("fromtime");
+		options.addOption(filename);
+		options.addOption("batch", false, "read the trades from a file in batch mode");
+		options.addOption("timeseries", false, "enable time series subscription to a set of contracts");
+		
+		options.addOption(contracts);
+		options.addOption(fromtime);
+		options.addOption("realtime", false, "real-time subscription (default)");
+		
+		CommandLineParser parser = new BasicParser();
+		try{
+			CommandLine cmd = parser.parse(options, args);
+			if(cmd.hasOption("file")){
+				new DXFeedStreamAll(cmd.getOptionValue("file"), cmd.hasOption("batch"));
+			}
+			else if(cmd.hasOption("timeseries")){
+				if(!cmd.hasOption("contracts") || !cmd.hasOption("fromtime")){
+					System.out.println("must include 'contracts' and 'fromtime' args when in time series mode");
+					System.exit(1);
+				}
+				new DXFeedStreamAll(cmd.getOptionValue("contracts").split(","), Long.parseLong(cmd.getOptionValue("fromtime")));
+			}
+			else{
+				new DXFeedStreamAll();
+			}
+		}catch(ParseException e){
+			System.out.println("error parsing arguments");
+			HelpFormatter formatter = new HelpFormatter();
+			formatter.printHelp("<-f FILENAME -batch> | <-timeseries -contracts CONTRACTS -fromtime TIMESTAMP> | <-realtime>", options);
+			System.exit(1);
 		}
 	}
 	
-	public DXFeedStreamAll(Mode mode, String info, long fromTime){
-		DXFeed feed;
-		switch(mode){
-		case TIMESERIES:
-			feed = DXFeed.getInstance();
-			// replay events using time series subscription
-			DXFeedTimeSeriesSubscription<TimeAndSale> timeSeriesSub = feed.createTimeSeriesSubscription(TimeAndSale.class);
-			timeSeriesSub.addEventListener(new TradeListener());
-			timeSeriesSub.setFromTime(1430870078205L);
-			timeSeriesSub.addSymbols(info);
-			break;
-		case REALTIME:
-			feed = DXFeed.getInstance();
-			DXFeedSubscription<TimeAndSale> sub = feed.createSubscription(TimeAndSale.class);
-			sub.addEventListener(new TradeListener());
-			sub.addSymbols(WildcardSymbol.ALL);
-			break;
-		case FILE:
-			try{
-				TradeListener listener = new TradeListener();
-				BufferedReader reader = new BufferedReader(new FileReader(info));
-				String line;
-				while((line = reader.readLine()) != null){
-					TimeAndSale t = DXFeedUtils.parseTrade(line);
-					if(t != null){
-						List<TimeAndSale> tns = new ArrayList<TimeAndSale>();
-						tns.add(t);
-						listener.processTrades(tns);
+	// constructor for file based streaming
+	public DXFeedStreamAll(String filename, boolean isBatch){
+		try{
+			TradeListener listener = new TradeListener();
+			BufferedReader reader = new BufferedReader(new FileReader(filename));
+			String nextLine;
+			TimeAndSale t = DXFeedUtils.parseTrade(reader.readLine());
+			while((nextLine = reader.readLine()) != null || t != null){
+				if(t != null){
+					List<TimeAndSale> tns = new ArrayList<TimeAndSale>();
+					tns.add(t);
+					listener.processTrades(tns);
+					TimeAndSale nextTrade = DXFeedUtils.parseTrade(nextLine);
+					if(!isBatch && nextTrade != null){
+						// wait the appropriate amount of time in between iterations based on the timestamp
+						long currentTime = System.currentTimeMillis();
+						while(System.currentTimeMillis() - currentTime < nextTrade.getTime() - t.getTime());
 					}
+					t = nextTrade;
 				}
-				reader.close();
+				else{
+					t = DXFeedUtils.parseTrade(nextLine);
+				}
 			}
-			catch(FileNotFoundException e){
-				System.out.println("Could not find " + info);
-			}
-			catch(IOException e){
-				e.printStackTrace();
-			}
+			
+			reader.close();
 		}
+		catch(FileNotFoundException e){
+			System.out.println("Could not find " + filename);
+		}
+		catch(IOException e){
+			e.printStackTrace();
+		}
+	}
+	
+	//constructor for time series based streaming
+	public DXFeedStreamAll(String[] contracts, long fromTime){
+		DXFeed feed = DXFeed.getInstance();
+		// replay events using time series subscription
+		DXFeedTimeSeriesSubscription<TimeAndSale> timeSeriesSub = feed.createTimeSeriesSubscription(TimeAndSale.class);
+		timeSeriesSub.addEventListener(new TradeListener());
+		timeSeriesSub.setFromTime(fromTime);
+		timeSeriesSub.addSymbols(new ArrayList<String>(Arrays.asList(contracts)));
+	}
+	
+	// constructor for real-time streaming
+	public DXFeedStreamAll(){
+		DXFeed feed = DXFeed.getInstance();
+		DXFeedSubscription<TimeAndSale> sub = feed.createSubscription(TimeAndSale.class);
+		sub.addEventListener(new TradeListener());
+		sub.addSymbols(WildcardSymbol.ALL);
 	}
 	
 	public class TradeListener implements DXFeedEventListener<TimeAndSale>{
