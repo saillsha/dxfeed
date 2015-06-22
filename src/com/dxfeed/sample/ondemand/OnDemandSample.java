@@ -38,8 +38,8 @@ public class OnDemandSample {
 		// Watch Accenture drop under $1 on May 6, 2010 "Flashcrash" from 14:47:48 to 14:48:02 EST
 		SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss 'EST'");
 		format.setTimeZone(TimeZone.getTimeZone("America/New_York"));
-		Date from = format.parse("2010-05-06 14:47:48 EST");
-		Date to = format.parse("2010-05-06 14:48:02 EST");
+		Date from = format.parse("2015-05-06 14:47:48 EST");
+		Date to = format.parse("2015-05-06 14:48:02 EST");
 
 		// switch into historical on-demand data replay mode
 		onDemand.replay(from);

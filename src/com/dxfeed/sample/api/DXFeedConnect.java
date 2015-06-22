@@ -92,7 +92,7 @@ public class DXFeedConnect {
 		sub.addEventListener(new PrintListener<TimeSeriesEvent<?>>());
 		sub.setFromTime(from);
 		System.out.println("WILDCARD: " + WildcardSymbol.ALL.toString());
-		sub.addSymbols(WildcardSymbol.ALL.toString());
+		sub.addSymbols(symbols);
 	}
 
 	private static class PrintListener<T> implements DXFeedEventListener<T> {
