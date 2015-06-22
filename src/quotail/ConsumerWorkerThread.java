@@ -3,6 +3,7 @@ package quotail;
 import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.io.ByteArrayInputStream;
@@ -15,8 +16,12 @@ import java.io.BufferedWriter;
 
 import com.dxfeed.event.market.Side;
 import com.dxfeed.event.market.TimeAndSale;
+
 import org.codehaus.jackson.map.ObjectMapper;
 
+import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPoolConfig;
 import kafka.consumer.ConsumerIterator;
 import kafka.consumer.KafkaStream;
  
@@ -30,7 +35,9 @@ public class ConsumerWorkerThread implements Runnable {
     private final int CLUSTER_QUANTITY_THRESHOLD = 50;
     ObjectMapper mapper = new ObjectMapper();
     HashMap<String, Cluster> contractsMap;
+    Map<String, String> aggVolMap = new HashMap<String, String>();
     Timer timer;
+    JedisPool jedisPool = new JedisPool(new JedisPoolConfig(), "localhost");
     
     public ConsumerWorkerThread(KafkaStream a_stream, int a_threadNumber, boolean printTrades) {
         m_threadNumber = a_threadNumber;
@@ -38,6 +45,12 @@ public class ConsumerWorkerThread implements Runnable {
         timer = new Timer(true);
         this.printTrades = printTrades;
         contractsMap = new HashMap<String, Cluster>();
+    	aggVolMap.put("CA", "0");
+    	aggVolMap.put("CB", "0");
+    	aggVolMap.put("CM", "0");
+    	aggVolMap.put("PA", "0");
+    	aggVolMap.put("PB", "0");
+    	aggVolMap.put("PM", "0");
         try{
         	out = new PrintWriter(new BufferedWriter(new FileWriter("/Users/sahil/Documents/workspace/dxfeed/trades.txt", true)));
         	clusterOut = new PrintWriter(new BufferedWriter(new FileWriter("/Users/sahil/Documents/workspace/dxfeed/clusters.txt", true)));
@@ -63,24 +76,24 @@ public class ConsumerWorkerThread implements Runnable {
     	public void run(){
     		Cluster cluster;
     		try{
-    		synchronized(contractsMap){
-				cluster = contractsMap.get(symbol);
-				if(cluster == null || cluster.trades == null || cluster.trades.getFirst() == null){
-					System.out.println("we got a problem over here");
-				}
-	    		System.out.println("cluster found " + DXFeedUtils.serializeTrade(cluster.trades.getFirst()));
-				contractsMap.remove(symbol);
-				if(newTrade != null){
-					Cluster newCluster = new Cluster(newTrade);
-					newCluster.task = new ClusteringTask(symbol);
-					timer.schedule(newCluster.task, CLUSTER_QUANTITY_THRESHOLD);
-				}
-    		}
-			if(cluster.quantity >= CLUSTER_QUANTITY_THRESHOLD){
-	    		cluster.classifyCluster();
-	    		clusterOut.println(cluster.toJSON());
-	    		clusterOut.flush();
-    		}
+	    		synchronized(contractsMap){
+					cluster = contractsMap.get(symbol);
+					if(cluster == null || cluster.trades == null || cluster.trades.getFirst() == null){
+						System.out.println("we got a problem over here");
+					}
+					contractsMap.remove(symbol);
+					if(newTrade != null){
+						Cluster newCluster = new Cluster(newTrade);
+						newCluster.task = new ClusteringTask(symbol);
+						timer.schedule(newCluster.task, CLUSTER_QUANTITY_THRESHOLD);
+					}
+	    		}
+				if(cluster.quantity >= CLUSTER_QUANTITY_THRESHOLD){
+		    		System.out.println("cluster found " + DXFeedUtils.serializeTrade(cluster.trades.getFirst()));
+					cluster.classifyCluster();
+		    		clusterOut.println(cluster.toJSON());
+		    		clusterOut.flush();
+	    		}
 			}catch(NullPointerException e){ 
 				e.printStackTrace();
 			}
@@ -91,10 +104,10 @@ public class ConsumerWorkerThread implements Runnable {
     	System.out.println("starting thread..." + m_threadNumber);
     	ConsumerIterator<byte[], byte[]> it = m_stream.iterator();
         while (it.hasNext()){
-        	System.out.println("message received");
         	byte[] serializedTrade = it.next().message();
          	ByteArrayInputStream in = new ByteArrayInputStream(serializedTrade);
     	    TimeAndSale t = null;
+    	    Jedis jedis = null;
     	    try{
     		    ObjectInputStream is = new ObjectInputStream(in);
     		    t = (TimeAndSale)is.readObject();
@@ -103,7 +116,25 @@ public class ConsumerWorkerThread implements Runnable {
     		    if(printTrades){
     		    	out.println(DXFeedUtils.serializeTrade(t));
     		    }
-    		    synchronized(contractsMap){
+    		    jedis = jedisPool.getResource();
+    		    String ticker = DXFeedUtils.getTicker(t.getEventSymbol());
+    		    char optionType = t.getEventSymbol().lastIndexOf('C', 6) == -1 ? 'P' : 'C';
+		    	String key = optionType + (t.getAggressorSide() == Side.BUY ? "A" : (t.getAggressorSide() == Side.SELL ? "B" : "M"));
+
+		    	// update redis with aggregate counts
+		    	Map<String, String> updatedVol = new HashMap<String, String>();
+		    	if(jedis.exists(ticker)){
+    		    	int aggVol = Integer.parseInt(jedis.hmget(ticker, key).get(0));
+    		    	aggVol += t.getSize();
+    		    	updatedVol.put(key, "" + aggVol);
+    		    }
+    		    else{
+    		    	updatedVol.putAll(aggVolMap);
+    		    	updatedVol.put(key, "" + (Integer.parseInt(aggVolMap.get(key)) + t.getSize()));
+    		    }
+		    	jedis.hmset(ticker, updatedVol);
+
+		    	synchronized(contractsMap){
 	    		    // synchronized access to shared contractsMap
         	      	System.out.println(t);
     		    	if(!contractsMap.containsKey(symbol)){
@@ -134,6 +165,9 @@ public class ConsumerWorkerThread implements Runnable {
     	    }
     	    catch(ClassNotFoundException e){
     	    	e.printStackTrace();
+    	    }
+    	    finally{
+    	    	jedis.close();
     	    }
         }
 	    out.close();
