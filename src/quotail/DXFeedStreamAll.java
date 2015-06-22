@@ -132,7 +132,7 @@ public class DXFeedStreamAll{
 		timeSeriesSub.setFromTime(fromTime);
 		timeSeriesSub.addSymbols(new ArrayList<String>(Arrays.asList(contracts)));
 	}
-	
+
 	// constructor for real-time streaming
 	public DXFeedStreamAll(){
 		DXFeed feed = DXFeed.getInstance();
@@ -140,13 +140,12 @@ public class DXFeedStreamAll{
 		sub.addEventListener(new TradeListener());
 		sub.addSymbols(WildcardSymbol.ALL);
 	}
-	
+
 	public class TradeListener implements DXFeedEventListener<TimeAndSale>{
 		public void processTrades(List<TimeAndSale> events){
 			List<KeyedMessage<byte[], byte[]>> trades = new ArrayList<KeyedMessage<byte[], byte[]>>();
 			for (TimeAndSale event : events){
-				// this will be true until ~2018 (when there are 2020 LEAPs)
-				String ticker = event.getEventSymbol().substring(1, event.getEventSymbol().indexOf('1'));
+				String ticker = DXFeedUtils.getTicker(event.getEventSymbol());
 		        ByteArrayOutputStream b = new ByteArrayOutputStream();
 				try{
 			        ObjectOutputStream o = new ObjectOutputStream(b);

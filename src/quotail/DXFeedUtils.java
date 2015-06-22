@@ -35,4 +35,10 @@ public class DXFeedUtils {
     	t.setSpreadLeg(fields[9] == "true");
     	return t;
     }
+    
+    // expects a contract symbol of the form .VXX150626C19, returns VXX
+    public static String getTicker(String contract){
+		// this will be true until ~2018 (when there are 2020 LEAPs)
+    	return contract.substring(1, contract.indexOf('1'));
+    }
 }
