@@ -41,7 +41,6 @@ public class DXFeedStreamAll{
 		props.put("metadata.broker.list", "localhost:9092");
 		// we have the option of overriding the default serializer here, could this be used to remove the casting that the consumer has to do?
 		props.put("serializer.class", "kafka.serializer.DefaultEncoder");
-		// if we find that we're creating too many paritions (based on hash of key, thus contract level), we can override this to maybe just the underlying symbol
 		props.put("partitioner.class", "quotail.TickerPartitioner");
 		props.put("request.required.acks", "1");		
 		ProducerConfig config = new ProducerConfig(props);
