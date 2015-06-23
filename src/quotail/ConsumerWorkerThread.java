@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.net.Socket;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -30,6 +32,7 @@ public class ConsumerWorkerThread implements Runnable {
     private int m_threadNumber;
     private PrintWriter out;
     private PrintWriter clusterOut;
+    private PrintWriter socketOut;
     private boolean printTrades;
     private final int CLUSTER_WAIT_TIME = 2000;
     private final int CLUSTER_QUANTITY_THRESHOLD = 50;
@@ -38,6 +41,7 @@ public class ConsumerWorkerThread implements Runnable {
     Map<String, String> aggVolMap = new HashMap<String, String>();
     Timer timer;
     JedisPool jedisPool = new JedisPool(new JedisPoolConfig(), "localhost");
+    Socket clusterSocket;
     
     public ConsumerWorkerThread(KafkaStream a_stream, int a_threadNumber, boolean printTrades) {
         m_threadNumber = a_threadNumber;
@@ -54,6 +58,8 @@ public class ConsumerWorkerThread implements Runnable {
         try{
         	out = new PrintWriter(new BufferedWriter(new FileWriter("/Users/sahil/Documents/workspace/dxfeed/trades.txt", true)));
         	clusterOut = new PrintWriter(new BufferedWriter(new FileWriter("/Users/sahil/Documents/workspace/dxfeed/clusters.txt", true)));
+        	clusterSocket = new Socket("localhost", 1337);
+        	socketOut = new PrintWriter(clusterSocket.getOutputStream(), true);
         }
         catch(IOException e){
         	e.printStackTrace();
@@ -90,9 +96,11 @@ public class ConsumerWorkerThread implements Runnable {
 	    		}
 				if(cluster.quantity >= CLUSTER_QUANTITY_THRESHOLD){
 		    		System.out.println("cluster found " + DXFeedUtils.serializeTrade(cluster.trades.getFirst()));
-					cluster.classifyCluster();
+		    		cluster.classifyCluster();
+		    		socketOut.write(cluster.toJSON());
 		    		clusterOut.println(cluster.toJSON());
 		    		clusterOut.flush();
+		    		socketOut.flush();
 	    		}
 			}catch(NullPointerException e){ 
 				e.printStackTrace();
