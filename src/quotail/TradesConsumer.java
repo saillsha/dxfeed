@@ -4,11 +4,12 @@ import kafka.consumer.ConsumerConfig;
 import kafka.consumer.KafkaStream;
 import kafka.javaapi.consumer.ConsumerConnector;
 
+import org.apache.commons.cli.*;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -16,10 +17,13 @@ public class TradesConsumer {
     private final ConsumerConnector consumer;
     private final String topic;
     private  ExecutorService executor;
- 
-    public TradesConsumer(String a_zookeeper, String a_groupId, String a_topic) {
+    private static String tradeFile = null, clusterFile = null;
+    private static int numThreads = 1;
+    private static String zookeeperUrl = "localhost:2181";
+    
+    public TradesConsumer(String a_groupId, String a_topic) {
         consumer = kafka.consumer.Consumer.createJavaConsumerConnector(
-                createConsumerConfig(a_zookeeper, a_groupId));
+                createConsumerConfig(zookeeperUrl, a_groupId));
         this.topic = a_topic;
     }
  
@@ -42,7 +46,7 @@ public class TradesConsumer {
         //
         int threadNumber = 0;
         for (final KafkaStream stream : streams) {
-            executor.submit(new ConsumerWorkerThread(stream, threadNumber, true));
+            executor.submit(new ConsumerWorkerThread(stream, threadNumber, tradeFile, clusterFile));
             threadNumber++;
         }
     }
@@ -58,14 +62,48 @@ public class TradesConsumer {
         return new ConsumerConfig(props);
     }
  
+	static void processOptions(String[] args){
+		Options options = new Options();
+		Option tradefile = OptionBuilder.withArgName("tradefile").hasArg()
+				.withDescription("the file path to which you want to write trades")
+				.create("tradefile");
+		Option clusterfile = OptionBuilder.withArgName("clusterfile").hasArg()
+				.withDescription("command separated list of contracts to subscribe to when in time series mode")
+				.create("clusterfile");
+		Option threads = OptionBuilder.withArgName("threads").hasArg()
+				.withDescription("number of threads to use for processing").create("threads");
+		Option zookeeper = OptionBuilder.withArgName("zookeeper").hasArg()
+				.withDescription("host of zookeeper server").create("zookeeper");
+		options.addOption(tradefile);
+		options.addOption(clusterfile);
+		options.addOption(threads);
+		options.addOption(zookeeper);
+		CommandLineParser parser = new BasicParser();
+		try{
+			CommandLine cmd = parser.parse(options, args);
+			if(cmd.hasOption("tradefile"))
+				tradeFile = cmd.getOptionValue("tradefile");
+			if(cmd.hasOption("clusterfile"))
+				clusterFile = cmd.getOptionValue("clusterFile");
+			if(cmd.hasOption("threads"))
+				numThreads = Integer.parseInt(cmd.getOptionValue("threads"));
+			if(cmd.hasOption("zookeeper"))
+				zookeeperUrl = cmd.getOptionValue("zookeeper");
+		}catch(ParseException e){
+			System.out.println("error parsing arguments");
+			HelpFormatter formatter = new HelpFormatter();
+			formatter.printHelp("<-tradefile FILENAME> <-clusterfile FILENAME> <-threads NUMBER> <-zookeeper URL>", options);
+			System.exit(1);
+		}
+	}
+    
     public static void main(String[] args) {
-        String zooKeeper = "localhost:2181";
+    	processOptions(args);
         String groupId = "tradesConsumer";
         String topic = "trades";
-        int threads = 1;
  
-        TradesConsumer example = new TradesConsumer(zooKeeper, groupId, topic);
-        example.run(threads);
+        TradesConsumer example = new TradesConsumer(groupId, topic);
+        example.run(numThreads);
 //        try {
 //            Thread.sleep(10000);
 //        } catch (InterruptedException ie) {
