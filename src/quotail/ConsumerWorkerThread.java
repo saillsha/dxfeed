@@ -56,8 +56,8 @@ public class ConsumerWorkerThread implements Runnable {
     	aggVolMap.put("PB", "0");
     	aggVolMap.put("PM", "0");
         try{
-        	out = new PrintWriter(new BufferedWriter(new FileWriter("/Users/sahil/Documents/workspace/dxfeed/trades.txt", true)));
-        	clusterOut = new PrintWriter(new BufferedWriter(new FileWriter("/Users/sahil/Documents/workspace/dxfeed/clusters.txt", true)));
+        	out = new PrintWriter(new BufferedWriter(new FileWriter("/Users/amir/Desktop/dxFeed/trades_backup.txt", true)));
+        	clusterOut = new PrintWriter(new BufferedWriter(new FileWriter("/Users/amir/Desktop/dxFeed/clusters.txt", true)));
         	clusterSocket = new Socket("localhost", 1337);
         	socketOut = new PrintWriter(clusterSocket.getOutputStream(), true);
         }
@@ -144,7 +144,7 @@ public class ConsumerWorkerThread implements Runnable {
 
 		    	synchronized(contractsMap){
 	    		    // synchronized access to shared contractsMap
-        	      	System.out.println(t);
+        	      	// System.out.println(t);
     		    	if(!contractsMap.containsKey(symbol)){
 	    		    	Cluster cluster = new Cluster(t);
 	    		    	cluster.task = new ClusteringTask(symbol);
