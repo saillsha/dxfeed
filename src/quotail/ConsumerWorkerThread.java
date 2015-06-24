@@ -30,10 +30,9 @@ import kafka.consumer.KafkaStream;
 public class ConsumerWorkerThread implements Runnable {
     private KafkaStream m_stream;
     private int m_threadNumber;
-    private PrintWriter out;
-    private PrintWriter clusterOut;
+    private PrintWriter tradeOut = null;
+    private PrintWriter clusterOut = null;
     private PrintWriter socketOut;
-    private boolean printTrades;
     private final int CLUSTER_WAIT_TIME = 2000;
     private final int CLUSTER_QUANTITY_THRESHOLD = 50;
     ObjectMapper mapper = new ObjectMapper();
@@ -43,11 +42,10 @@ public class ConsumerWorkerThread implements Runnable {
     JedisPool jedisPool = new JedisPool(new JedisPoolConfig(), "localhost");
     Socket clusterSocket;
     
-    public ConsumerWorkerThread(KafkaStream a_stream, int a_threadNumber, boolean printTrades) {
+    public ConsumerWorkerThread(KafkaStream a_stream, int a_threadNumber, String tradeFile, String clusterFile) {
         m_threadNumber = a_threadNumber;
         m_stream = a_stream;
         timer = new Timer(true);
-        this.printTrades = printTrades;
         contractsMap = new HashMap<String, Cluster>();
     	aggVolMap.put("CA", "0");
     	aggVolMap.put("CB", "0");
@@ -56,8 +54,12 @@ public class ConsumerWorkerThread implements Runnable {
     	aggVolMap.put("PB", "0");
     	aggVolMap.put("PM", "0");
         try{
-        	out = new PrintWriter(new BufferedWriter(new FileWriter("/Users/amir/Desktop/dxFeed/trades_backup.txt", true)));
-        	clusterOut = new PrintWriter(new BufferedWriter(new FileWriter("/Users/amir/Desktop/dxFeed/clusters.txt", true)));
+        	if(tradeFile != null){
+        		tradeOut = new PrintWriter(new BufferedWriter(new FileWriter(tradeFile, true)));
+        	}
+        	if(clusterFile != null){
+        		clusterOut = new PrintWriter(new BufferedWriter(new FileWriter(clusterFile, true)));
+        	}
         	clusterSocket = new Socket("localhost", 1337);
         	socketOut = new PrintWriter(clusterSocket.getOutputStream(), true);
         }
@@ -84,22 +86,22 @@ public class ConsumerWorkerThread implements Runnable {
     		try{
 	    		synchronized(contractsMap){
 					cluster = contractsMap.get(symbol);
-					if(cluster == null || cluster.trades == null || cluster.trades.getFirst() == null){
-						System.out.println("we got a problem over here");
-					}
 					contractsMap.remove(symbol);
 					if(newTrade != null){
 						Cluster newCluster = new Cluster(newTrade);
 						newCluster.task = new ClusteringTask(symbol);
 						timer.schedule(newCluster.task, CLUSTER_QUANTITY_THRESHOLD);
+						contractsMap.put(symbol, newCluster);
 					}
 	    		}
 				if(cluster.quantity >= CLUSTER_QUANTITY_THRESHOLD){
 		    		System.out.println("cluster found " + DXFeedUtils.serializeTrade(cluster.trades.getFirst()));
 		    		cluster.classifyCluster();
 		    		socketOut.write(cluster.toJSON());
-		    		clusterOut.println(cluster.toJSON());
-		    		clusterOut.flush();
+		    		if(clusterOut != null){
+		    			clusterOut.println(cluster.toJSON());
+			    		clusterOut.flush();
+		    		}
 		    		socketOut.flush();
 	    		}
 			}catch(NullPointerException e){ 
@@ -121,8 +123,8 @@ public class ConsumerWorkerThread implements Runnable {
     		    t = (TimeAndSale)is.readObject();
     		    String symbol = t.getEventSymbol();
     		    if(t.getSize() == 0) continue;
-    		    if(printTrades){
-    		    	out.println(DXFeedUtils.serializeTrade(t));
+    		    if(tradeOut != null){
+    		    	tradeOut.println(DXFeedUtils.serializeTrade(t));
     		    }
     		    jedis = jedisPool.getResource();
     		    String ticker = DXFeedUtils.getTicker(t.getEventSymbol());
@@ -143,8 +145,6 @@ public class ConsumerWorkerThread implements Runnable {
 		    	jedis.hmset(ticker, updatedVol);
 
 		    	synchronized(contractsMap){
-	    		    // synchronized access to shared contractsMap
-        	      	// System.out.println(t);
     		    	if(!contractsMap.containsKey(symbol)){
 	    		    	Cluster cluster = new Cluster(t);
 	    		    	cluster.task = new ClusteringTask(symbol);
@@ -178,7 +178,7 @@ public class ConsumerWorkerThread implements Runnable {
     	    	jedis.close();
     	    }
         }
-	    out.close();
+	    tradeOut.close();
         System.out.println("Shutting down Thread: " + m_threadNumber);
     }
 }

@@ -24,7 +24,6 @@ import kafka.javaapi.producer.Producer;
 import kafka.producer.KeyedMessage;
 import kafka.producer.ProducerConfig;
 
-
 public class DXFeedStreamAll{
 	static Producer<byte[], byte[]> producer;
 	static int counter;
