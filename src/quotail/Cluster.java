@@ -29,15 +29,17 @@ public class Cluster {
 		if(t.getSize() > 0){
 			this.quantity += t.getSize();
 			this.money += t.getSize() * t.getPrice() * 100;
+			boolean hasInserted = false;
 			Iterator<TimeAndSale> it = trades.descendingIterator();
 			for(int index = trades.size(); it.hasNext(); --index){
 				TimeAndSale lastTrade = it.next();
 				if(lastTrade.getSequence() < t.getSequence()){
 					trades.add(index, t);
+					hasInserted = true;
 					break;
 				}
 			}
-			if(!it.hasNext()){
+			if(!hasInserted){
 				trades.add(0, t);
 			}
 		}
