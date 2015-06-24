@@ -93,7 +93,7 @@ public class Cluster {
 		sb.append(",\"trades\":[");
 		for(TimeAndSale t : this.trades){
 			sb.append("{\"time\":");
-			sb.append(new Date(t.getTime()));
+			sb.append(t.getTime());
 			sb.append(",\"bid\":");
 			sb.append(t.getBidPrice());
 			sb.append(",\"ask\":");
