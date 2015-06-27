@@ -18,10 +18,10 @@ public class TradesConsumer {
     private final String topic;
     private  ExecutorService executor;
     private static String tradeFile = null, clusterFile = null;
-    private static int numThreads = 1;
+    private static int numThreads = 4;
     private static String zookeeperUrl = "localhost:2181";
     
-    public TradesConsumer(String a_groupId, String a_topic) {
+    public TradesConsumer(String a_groupId, String a_topic, String zookeeperUrl) {
         consumer = kafka.consumer.Consumer.createJavaConsumerConnector(
                 createConsumerConfig(zookeeperUrl, a_groupId));
         this.topic = a_topic;
@@ -101,8 +101,8 @@ public class TradesConsumer {
     	processOptions(args);
         String groupId = "tradesConsumer";
         String topic = "trades";
- 
-        TradesConsumer example = new TradesConsumer(groupId, topic);
+
+        TradesConsumer example = new TradesConsumer(groupId, topic, zookeeperUrl);
         example.run(numThreads);
 //        try {
 //            Thread.sleep(10000);
