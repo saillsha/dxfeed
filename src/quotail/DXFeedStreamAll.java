@@ -41,7 +41,7 @@ public class DXFeedStreamAll{
 		// we have the option of overriding the default serializer here, could this be used to remove the casting that the consumer has to do?
 		props.put("serializer.class", "kafka.serializer.DefaultEncoder");
 		props.put("partitioner.class", "quotail.TickerPartitioner");
-		props.put("request.required.acks", "1");		
+		props.put("request.required.acks", "1");
 		ProducerConfig config = new ProducerConfig(props);
 		producer = new Producer<byte[], byte[]>(config);
 		processOptions(args);

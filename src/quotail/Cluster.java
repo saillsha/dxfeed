@@ -15,11 +15,12 @@ public class Cluster {
 	public int quantity = 0;
 	// TimerTask for processing this cluster
 	public TimerTask task;
-	
+	public boolean isSpreadLeg = false;
 	public float money = 0;
 	public Side classification;
 	
 	public Cluster(TimeAndSale t){
+		isSpreadLeg = t.isSpreadLeg();
 		trades = new LinkedList<TimeAndSale>();
 		addTrade(t);
 	}
