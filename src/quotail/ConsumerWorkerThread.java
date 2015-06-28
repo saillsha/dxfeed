@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.net.Socket;
-
+import java.util.concurrent.TimeUnit;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -18,6 +18,9 @@ import java.io.BufferedWriter;
 
 import com.dxfeed.event.market.Side;
 import com.dxfeed.event.market.TimeAndSale;
+import com.dxfeed.event.market.Summary;
+import com.dxfeed.promise.Promise;
+import com.dxfeed.api.DXFeed;
 
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.Jedis;
@@ -28,9 +31,11 @@ import kafka.consumer.KafkaStream;
 public class ConsumerWorkerThread implements Runnable {
     private final int CLUSTER_WAIT_TIME = 2000;
     private final int CLUSTER_QUANTITY_THRESHOLD = 50;
+    private final long SUMMARY_TIMEOUT = 200;
 	private static JedisPool jedisPool = new JedisPool(new JedisPoolConfig(), "localhost");
     private static PrintWriter tradeOut = null;
     private static PrintWriter clusterOut = null;
+	public static DXFeed feed = DXFeed.getInstance();
 //    private static PrintWriter socketOut;
     private static Timer timer;
 
@@ -112,17 +117,14 @@ public class ConsumerWorkerThread implements Runnable {
 	    		synchronized(contractsMap){
 					contractsMap.remove(symbol);
 	    		}
-	    		if(cluster == null){
-	    			System.out.println("NULL cluster");
-	    		}
 				if(cluster.quantity >= CLUSTER_QUANTITY_THRESHOLD){
 		    		System.out.println("cluster found " + DXFeedUtils.serializeTrade(cluster.trades.getFirst()));
 		    		cluster.classifyCluster();
-
+		    		Promise<Summary> summaryPromise = feed.getLastEventPromise(Summary.class, symbol);
+		    		if(summaryPromise.awaitWithoutException(SUMMARY_TIMEOUT, TimeUnit.MILLISECONDS)){
+			    		cluster.openinterest = summaryPromise.getResult().getOpenInterest();		    			
+		    		}
 		    		if(cluster.isSpreadLeg){
-		    			if(spread == null){
-		    				System.out.println("spread " + symbol + " is null");
-		    			}
 		    			spread.incrProcessed();
 		    			System.out.println("spread found " + symbol + " " + spread.numProcessed + "/" + spread.legs.size());
 		    			if(spread.isProcessed()){
@@ -161,12 +163,14 @@ public class ConsumerWorkerThread implements Runnable {
     	System.out.println("starting thread..." + m_threadNumber);
 	    Jedis jedis = jedisPool.getResource();
     	ConsumerIterator<byte[], byte[]> it = m_stream.iterator();
+	    System.out.println("got redis thread");
 	    TimeAndSale t = null;
 	    // contract and ticker symbols
 	    String symbol, ticker;
 	    
 	    try{
 	    	while (it.hasNext()){
+	    		System.out.println("event found");
 	        	byte[] serializedTrade = it.next().message();
 	         	ByteArrayInputStream in = new ByteArrayInputStream(serializedTrade);
 
