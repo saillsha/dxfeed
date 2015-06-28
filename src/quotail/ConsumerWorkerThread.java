@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.net.Socket;
@@ -27,7 +28,10 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPoolConfig;
 import kafka.consumer.ConsumerIterator;
 import kafka.consumer.KafkaStream;
- 
+import kafka.javaapi.producer.Producer;
+import kafka.producer.ProducerConfig;
+import kafka.producer.KeyedMessage;
+
 public class ConsumerWorkerThread implements Runnable {
     private final int CLUSTER_WAIT_TIME = 2000;
     private final int CLUSTER_QUANTITY_THRESHOLD = 50;
@@ -35,8 +39,8 @@ public class ConsumerWorkerThread implements Runnable {
 	private static JedisPool jedisPool = new JedisPool(new JedisPoolConfig(), "localhost");
     private static PrintWriter tradeOut = null;
     private static PrintWriter clusterOut = null;
-	public static DXFeed feed = DXFeed.getInstance();
-//    private static PrintWriter socketOut;
+    private static Producer<String, String> producer = null;
+    public static DXFeed feed = DXFeed.getInstance();
     private static Timer timer;
 
 	private KafkaStream m_stream;
@@ -46,6 +50,17 @@ public class ConsumerWorkerThread implements Runnable {
     private Map<String, String> aggVolMap = new HashMap<String, String>();
     private HashMap<String, SpreadTracker> spreadsMap = new HashMap<String, SpreadTracker>();
     
+    public void configureKafkaProducer(){
+		Properties props = new Properties();
+		props.put("metadata.broker.list", "localhost:9092");
+		// we have the option of overriding the default serializer here, could this be used to remove the casting that the consumer has to do?
+		props.put("serializer.class", "kafka.serializer.StringEncoder");
+//		props.put("partitioner.class", "quotail.TickerPartitioner");
+		props.put("request.required.acks", "1");
+		ProducerConfig config = new ProducerConfig(props);
+		producer = new Producer<String, String>(config);
+    }
+
     public ConsumerWorkerThread(KafkaStream a_stream, int a_threadNumber, String tradeFile, String clusterFile) {
         m_threadNumber = a_threadNumber;
         m_stream = a_stream;
@@ -57,6 +72,8 @@ public class ConsumerWorkerThread implements Runnable {
     	aggVolMap.put("PA", "0");
     	aggVolMap.put("PB", "0");
     	aggVolMap.put("PM", "0");
+    	if(producer == null)
+    		configureKafkaProducer();
         try{
         	if(tradeFile != null){
         		tradeOut = new PrintWriter(new BufferedWriter(new FileWriter(tradeFile, true)));
@@ -64,8 +81,6 @@ public class ConsumerWorkerThread implements Runnable {
         	if(clusterFile != null){
         		clusterOut = new PrintWriter(new BufferedWriter(new FileWriter(clusterFile, true)));
         	}
-//        	Socket clusterSocket = new Socket("localhost", 1337);
-//        	socketOut = new PrintWriter(clusterSocket.getOutputStream(), true);
         }
         catch(IOException e){
         	e.printStackTrace();
@@ -118,7 +133,6 @@ public class ConsumerWorkerThread implements Runnable {
 					contractsMap.remove(symbol);
 	    		}
 				if(cluster.quantity >= CLUSTER_QUANTITY_THRESHOLD){
-		    		System.out.println("cluster found " + DXFeedUtils.serializeTrade(cluster.trades.getFirst()));
 		    		cluster.classifyCluster();
 		    		Promise<Summary> summaryPromise = feed.getLastEventPromise(Summary.class, symbol);
 		    		if(summaryPromise.awaitWithoutException(SUMMARY_TIMEOUT, TimeUnit.MILLISECONDS)){
@@ -128,20 +142,15 @@ public class ConsumerWorkerThread implements Runnable {
 		    			spread.incrProcessed();
 		    			System.out.println("spread found " + symbol + " " + spread.numProcessed + "/" + spread.legs.size());
 		    			if(spread.isProcessed()){
-		    				// TODO: push out spread to kafka
-//				    		synchronized(socketOut){
-				    			System.out.println("Spread PROCESSED: " + spread.toString());
-//				    			socketOut.write(spread.toString());
-//				    			socketOut.flush();
-//				    		}
+			    			System.out.println("Spread PROCESSED: " + spread.toString());
+		    				KeyedMessage<String, String> message = new KeyedMessage<String, String>("clusters", DXFeedUtils.getTicker(symbol), spread.toString());
+		    				producer.send(message);
 		    			}
 		    		}
 		    		else{
-		    			// TODO: push out cluster to kafka
-//			    		synchronized(socketOut){
-//			    			socketOut.write("[" + cluster.toJSON() + "]");
-//			    			socketOut.flush();
-//			    		}
+		    			System.out.println("[" + cluster.toJSON() + "]");
+	    				KeyedMessage<String, String> message = new KeyedMessage<String, String>("clusters", DXFeedUtils.getTicker(symbol), "[" + cluster.toJSON() + "]");
+	    				producer.send(message);
 		    		}
 		    		if(clusterOut != null){
 		    			// write out cluster to file
@@ -163,14 +172,12 @@ public class ConsumerWorkerThread implements Runnable {
     	System.out.println("starting thread..." + m_threadNumber);
 	    Jedis jedis = jedisPool.getResource();
     	ConsumerIterator<byte[], byte[]> it = m_stream.iterator();
-	    System.out.println("got redis thread");
 	    TimeAndSale t = null;
 	    // contract and ticker symbols
 	    String symbol, ticker;
 	    
 	    try{
 	    	while (it.hasNext()){
-	    		System.out.println("event found");
 	        	byte[] serializedTrade = it.next().message();
 	         	ByteArrayInputStream in = new ByteArrayInputStream(serializedTrade);
 

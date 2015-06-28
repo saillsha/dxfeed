@@ -112,5 +112,4 @@ public class TradesConsumer {
         while(true){}
 //        example.shutdown();
     }
-
 }
