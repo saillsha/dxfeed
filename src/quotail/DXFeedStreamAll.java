@@ -155,7 +155,7 @@ public class DXFeedStreamAll{
 				catch(IOException e){
 					e.printStackTrace();
 				}
-				trades.add(new KeyedMessage<byte[], byte[]>("trades", ticker.getBytes(), b.toByteArray()));
+				trades.add(new KeyedMessage<byte[], byte[]>("timeandsales", ticker.getBytes(), b.toByteArray()));
 				System.out.println(++counter + "\t" + event);
 			}
 			producer.send(trades);
