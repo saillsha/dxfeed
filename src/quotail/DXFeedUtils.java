@@ -32,7 +32,7 @@ public class DXFeedUtils {
     	t.setBidPrice(Double.parseDouble(fields[6]));
     	t.setAskPrice(Double.parseDouble(fields[7]));
     	t.setAggressorSide(fields[8] == "BUY" ? Side.BUY : Side.SELL);
-    	t.setSpreadLeg(fields[9] == "true");
+    	t.setSpreadLeg(fields[9].equals("true"));
     	return t;
     }
     
