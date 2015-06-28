@@ -18,7 +18,7 @@ public class TradesConsumer {
     private final String topic;
     private  ExecutorService executor;
     private static String tradeFile = null, clusterFile = null;
-    private static int numThreads = 4;
+    private static int numThreads = 2;
     private static String zookeeperUrl = "localhost:2181";
     
     public TradesConsumer(String a_groupId, String a_topic, String zookeeperUrl) {
