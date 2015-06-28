@@ -70,8 +70,8 @@ public class ConsumerWorkerThread implements Runnable {
     // class manages the number of legs in a spread and the number that have been processed
     // a spread will only be pushed out on the socket when all of its legs have been processed
     private class SpreadTracker {
-    	private List<Cluster> legs = new ArrayList<Cluster>();
-    	private int numProcessed = 0;
+    	public List<Cluster> legs = new ArrayList<Cluster>();
+    	public int numProcessed = 0;
     	public SpreadTracker(Cluster cluster){
     		legs.add(cluster);
     	}
@@ -103,20 +103,13 @@ public class ConsumerWorkerThread implements Runnable {
     	public ClusteringTask(Cluster cluster){
     		this.cluster = cluster;
     		this.symbol = cluster.trades.getFirst().getEventSymbol();
-    		spread = spreadsMap.get(DXFeedUtils.getTicker(symbol));
-    	}
-    	// overloaded constructor for when we find a new trade that is 
-    	// more than the cluster interval away from the first one, 
-    	// because then we want to start a new cluster with the latest trade
-    	public ClusteringTask(TimeAndSale newTrade){
-    		this.newTrade = newTrade;
     	}
     	
+    	public void addSpread(SpreadTracker spread){ this.spread = spread; }
+    	
     	public void run(){
-    		Cluster cluster;
     		try{
 	    		synchronized(contractsMap){
-					cluster = contractsMap.get(symbol);
 					contractsMap.remove(symbol);
 	    		}
 	    		if(cluster == null){
@@ -127,11 +120,15 @@ public class ConsumerWorkerThread implements Runnable {
 		    		cluster.classifyCluster();
 
 		    		if(cluster.isSpreadLeg){
+		    			if(spread == null){
+		    				System.out.println("spread " + symbol + " is null");
+		    			}
 		    			spread.incrProcessed();
+		    			System.out.println("spread found " + symbol + " " + spread.numProcessed + "/" + spread.legs.size());
 		    			if(spread.isProcessed()){
 		    				// TODO: push out spread to kafka
 //				    		synchronized(socketOut){
-				    			System.out.println("Spread found: " + spread.toString());
+				    			System.out.println("Spread PROCESSED: " + spread.toString());
 //				    			socketOut.write(spread.toString());
 //				    			socketOut.flush();
 //				    		}
@@ -205,18 +202,23 @@ public class ConsumerWorkerThread implements Runnable {
     		    	if(!contractsMap.containsKey(symbol)){
     		    		// create new cluster for this trade if none exists yet for the contract
 	    		    	Cluster cluster = new Cluster(t);
-	    		    	cluster.task = new ClusteringTask(cluster);
+	    		    	ClusteringTask clusterTask = new ClusteringTask(cluster);
+	    		    	cluster.task = clusterTask;
 	    		    	contractsMap.put(symbol, cluster);
 	    		    	timer.schedule(cluster.task, CLUSTER_WAIT_TIME);
 	    		    	
 	    		    	if(t.isSpreadLeg()){
-	    		    		System.out.println("We found a spread leg");
 		    		    	// spread tracking logic, add spread leg for this ticker
 	    		    		synchronized(spreadsMap){
-		    		    		if(!spreadsMap.containsKey(ticker))
-			    		    		spreadsMap.put(ticker, new SpreadTracker(cluster));
-		    		    		else
-			    		    		spreadsMap.get(ticker).addLeg(cluster);		    		    			
+		    		    		if(!spreadsMap.containsKey(ticker)){
+		    		    			SpreadTracker spread = new SpreadTracker(cluster);
+			    		    		spreadsMap.put(ticker, spread);
+			    		    		clusterTask.addSpread(spread);
+		    		    		}
+		    		    		else{
+			    		    		spreadsMap.get(ticker).addLeg(cluster);
+			    		    		clusterTask.addSpread(spreadsMap.get(ticker));
+		    		    		}
 		    		    	}
 	    		    	}
 	    		    }
