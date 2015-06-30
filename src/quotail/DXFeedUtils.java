@@ -1,4 +1,5 @@
 package quotail;
+import java.util.Date;
 
 import com.dxfeed.event.market.Side;
 import com.dxfeed.event.market.TimeAndSale;
@@ -6,6 +7,8 @@ import com.dxfeed.event.market.TimeAndSale;
 public class DXFeedUtils {
 	final static int NUM_FIELDS = 10;
 	final static char DELIM = '\t';
+	static final int START_MIN = 9*60 + 30;
+	static final int END_MIN = 16*60;
 	
 	public static String getHeader(){
 		return "SYMBOL\tTIME\tSEQ\tEX\tSIZE\tPRICE\tBID\tASK\tSIDE\tSPREAD";
@@ -40,5 +43,19 @@ public class DXFeedUtils {
     public static String getTicker(String contract){
 		// this will be true until ~2018 (when there are 2020 LEAPs)
     	return contract.substring(1, contract.indexOf('1'));
+    }
+
+    // check if the trade occurred during normal trading hours
+    public static boolean isDuringMarketHours(long time){
+    	Date d = new Date(time);
+		int minutes = d.getHours() * 60 + d.getMinutes();
+		return minutes > START_MIN && minutes < END_MIN;
+    }
+
+    // a mini contract has a numeric character in its ticker
+    // Example: .AMZN7150717C330
+    public static boolean isMiniContract(String ticker){
+    	char last = ticker.charAt(ticker.length() - 1);
+    	return last >= '0' && last <= '9';
     }
 }

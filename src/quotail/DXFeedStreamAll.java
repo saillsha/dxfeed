@@ -147,6 +147,11 @@ public class DXFeedStreamAll{
 			List<KeyedMessage<byte[], byte[]>> trades = new ArrayList<KeyedMessage<byte[], byte[]>>();
 			for (TimeAndSale event : events){
 				String ticker = DXFeedUtils.getTicker(event.getEventSymbol());
+
+				// we have no interest in parsing trades that are not during normal market hours or are mini contracts
+				if(!DXFeedUtils.isDuringMarketHours(event.getTime()) || DXFeedUtils.isMiniContract(ticker))
+					continue;
+
 		        ByteArrayOutputStream b = new ByteArrayOutputStream();
 				try{
 			        ObjectOutputStream o = new ObjectOutputStream(b);
