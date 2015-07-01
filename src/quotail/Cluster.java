@@ -29,6 +29,15 @@ public class Cluster {
 	// insert the trade in its proper place based on the sequence field
 	public void addTrade(TimeAndSale t){
 		if(t.getSize() > 0){
+			float d1 = (float)(t.getPrice() - t.getBidPrice());
+			float d2 = (float)(t.getAskPrice() - t.getPrice());
+			if(Math.abs(d1 - d2) < .001)
+				t.setAggressorSide(Side.UNDEFINED);
+			else if(d1 < d2)
+				t.setAggressorSide(Side.SELL);
+			else
+				t.setAggressorSide(Side.BUY);
+
 			this.quantity += t.getSize();
 			this.money += t.getSize() * t.getPrice() * 100;
 			boolean hasInserted = false;
