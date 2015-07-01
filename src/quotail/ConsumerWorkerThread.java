@@ -20,6 +20,7 @@ import java.io.BufferedWriter;
 import com.dxfeed.event.market.Side;
 import com.dxfeed.event.market.TimeAndSale;
 import com.dxfeed.event.market.Summary;
+import com.dxfeed.event.market.Trade;
 import com.dxfeed.promise.Promise;
 import com.dxfeed.api.DXFeed;
 
@@ -33,8 +34,9 @@ import kafka.producer.ProducerConfig;
 import kafka.producer.KeyedMessage;
 
 public class ConsumerWorkerThread implements Runnable {
-    private final int CLUSTER_WAIT_TIME = 2000;
+    private final int CLUSTER_WAIT_TIME = 1000;
     private final int CLUSTER_QUANTITY_THRESHOLD = 50;
+    private final int CLUSTER_MONEY_THRESHOLD = 50000;
     private final long SUMMARY_TIMEOUT = 200;
 	private static JedisPool jedisPool = new JedisPool(new JedisPoolConfig(), "localhost");
     private static PrintWriter tradeOut = null;
@@ -133,10 +135,15 @@ public class ConsumerWorkerThread implements Runnable {
 					contractsMap.remove(symbol);
 	    		}
 				if(cluster.quantity >= CLUSTER_QUANTITY_THRESHOLD){
-		    		cluster.classifyCluster();
+		    		
+					cluster.classifyCluster();
 		    		Promise<Summary> summaryPromise = feed.getLastEventPromise(Summary.class, symbol);
 		    		if(summaryPromise.awaitWithoutException(SUMMARY_TIMEOUT, TimeUnit.MILLISECONDS)){
 			    		cluster.openinterest = summaryPromise.getResult().getOpenInterest();
+		    		}
+		    		Promise<Trade> tradePromise = feed.getLastEventPromise(Trade.class, symbol);
+		    		if(tradePromise.awaitWithoutException(SUMMARY_TIMEOUT, TimeUnit.MILLISECONDS)){
+		    			cluster.volume = (int)tradePromise.getResult().getDayVolume();
 		    		}
 		    		if(cluster.isSpreadLeg){
 		    			spread.incrProcessed();

@@ -17,6 +17,7 @@ public class Cluster {
 	public TimerTask task;
 	public boolean isSpreadLeg = false;
 	public long openinterest = -1;
+	public int volume = -1;
 	public float money = 0;
 	public Side classification;
 	
@@ -103,6 +104,8 @@ public class Cluster {
 		sb.append(this.classification == Side.BUY ? "\"B\"" : (this.classification == Side.SELL ? "\"S\"" : "\"U\""));
 		sb.append(",\"oi\":");
 		sb.append(this.openinterest);
+		sb.append(",\"volume\":");
+		sb.append(this.volume);
 		sb.append(",\"trades\":[");
 		for(TimeAndSale t : this.trades){
 			sb.append("{\"time\":");
