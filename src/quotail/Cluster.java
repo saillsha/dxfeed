@@ -110,6 +110,10 @@ public class Cluster {
 			sb.append("\"" + t.getExchangeCode() + "\"");
 			sb.append(",\"isSpread\":");
 			sb.append(t.isSpreadLeg());
+			sb.append(",\"size\":");
+			sb.append(t.getSize());
+			sb.append(",\"sequence\":");
+			sb.append(t.getSequence());
 			sb.append("},");
 		}
 		// remove trailing comma
