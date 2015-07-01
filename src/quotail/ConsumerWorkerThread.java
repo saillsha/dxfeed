@@ -136,7 +136,7 @@ public class ConsumerWorkerThread implements Runnable {
 		    		cluster.classifyCluster();
 		    		Promise<Summary> summaryPromise = feed.getLastEventPromise(Summary.class, symbol);
 		    		if(summaryPromise.awaitWithoutException(SUMMARY_TIMEOUT, TimeUnit.MILLISECONDS)){
-			    		cluster.openinterest = summaryPromise.getResult().getOpenInterest();		    			
+			    		cluster.openinterest = summaryPromise.getResult().getOpenInterest();
 		    		}
 		    		if(cluster.isSpreadLeg){
 		    			spread.incrProcessed();

@@ -49,7 +49,7 @@ public class DXFeedUtils {
     public static boolean isDuringMarketHours(long time){
     	Date d = new Date(time);
 		int minutes = d.getHours() * 60 + d.getMinutes();
-		return minutes > START_MIN && minutes < END_MIN;
+		return minutes >= START_MIN && minutes < END_MIN;
     }
 
     // a mini contract has a numeric character in its ticker
