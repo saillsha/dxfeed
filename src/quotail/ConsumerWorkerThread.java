@@ -1,13 +1,13 @@
 package quotail;
 
 import java.util.HashMap;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.net.Socket;
+import java.util.Calendar;
+import java.util.GregorianCalendar;
 import java.util.concurrent.TimeUnit;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -64,11 +64,10 @@ public class ConsumerWorkerThread implements Runnable {
     private HashMap<String, SpreadTracker> spreadsMap = new HashMap<String, SpreadTracker>();
     
     public void configureKafkaProducer(){
-		Properties props = new Properties();
+    	Properties props = new Properties();
 		props.put("metadata.broker.list", "localhost:9092");
 		// we have the option of overriding the default serializer here, could this be used to remove the casting that the consumer has to do?
 		props.put("serializer.class", "kafka.serializer.StringEncoder");
-//		props.put("partitioner.class", "quotail.TickerPartitioner");
 		props.put("request.required.acks", "1");
 		ProducerConfig config = new ProducerConfig(props);
 		producer = new Producer<String, String>(config);
@@ -101,18 +100,23 @@ public class ConsumerWorkerThread implements Runnable {
     }
 
     // class manages the number of legs in a spread and the number that have been processed
-    // a spread will only be pushed out on the socket when all of its legs have been processed
+    // a spread will only be pushed out to kafka when all of its legs have been processed
     private class SpreadTracker {
-    	public List<Cluster> legs = new ArrayList<Cluster>();
+    	public LinkedBlockingQueue<Cluster> legs = new LinkedBlockingQueue<Cluster>();
     	public int numProcessed = 0;
     	public SpreadTracker(Cluster cluster){
-    		legs.add(cluster);
+    		legs.offer(cluster);
     	}
     	public void reset(){
     		legs.clear();
     		numProcessed = 0;
     	}
-    	public void addLeg(Cluster cluster){ legs.add(cluster); }
+    	public void addLeg(Cluster cluster){
+    		if(Math.abs( cluster.trades.get(0).getTime() - legs.peek().trades.get(0).getTime() ) > CLUSTER_WAIT_TIME){
+    			this.reset();
+    		}
+    		legs.offer(cluster);
+    	}
     	public void incrProcessed(){ ++this.numProcessed; }
     	public String toString(){
     		StringBuilder sb = new StringBuilder();
@@ -131,11 +135,12 @@ public class ConsumerWorkerThread implements Runnable {
     private class ClusteringTask extends TimerTask{
     	private Cluster cluster;
     	private String symbol;
-    	private TimeAndSale newTrade = null;
+    	private String ticker;
     	private SpreadTracker spread;
     	public ClusteringTask(Cluster cluster){
     		this.cluster = cluster;
     		this.symbol = cluster.trades.getFirst().getEventSymbol();
+    		this.ticker = DXFeedUtils.getTicker(symbol);
     	}
     	
     	public void addSpread(SpreadTracker spread){ this.spread = spread; }
@@ -156,17 +161,27 @@ public class ConsumerWorkerThread implements Runnable {
 		    		if(tradePromise.awaitWithoutException(SUMMARY_TIMEOUT, TimeUnit.MILLISECONDS)){
 		    			cluster.volume = (int)tradePromise.getResult().getDayVolume();
 		    		}
+	    			System.out.println("[" + cluster.toJSON() + "]");
 		    		if(cluster.isSpreadLeg){
-		    			spread.incrProcessed();
-		    			System.out.println("spread found " + symbol + " " + spread.numProcessed + "/" + spread.legs.size());
-		    			if(spread.isProcessed()){
+		    			boolean isSpreadProcessed;
+		    			synchronized(spreadsMap){
+			    			System.out.println(String.format("SPREAD CLUSTER FOUND (%d/%d)\t%s\t%d\t%f\t%f\t%f\t%d", spread.numProcessed, spread.legs.size(),
+			    					cluster.trades.get(0).getEventSymbol(), cluster.trades.get(0).getTime(), cluster.trades.get(0).getBidPrice(),
+			    					cluster.trades.get(0).getAskPrice(), cluster.trades.get(0).getPrice(), cluster.quantity));
+		    				spread.incrProcessed();
+		    				isSpreadProcessed = spread.isProcessed();
+		    				if(isSpreadProcessed) spreadsMap.remove(ticker);
+		    			}
+		    			if(isSpreadProcessed){
 			    			System.out.println("Spread PROCESSED: " + spread.toString());
 		    				KeyedMessage<String, String> message = new KeyedMessage<String, String>("clusters", DXFeedUtils.getTicker(symbol), spread.toString());
 		    				producer.send(message);
 		    			}
+		    			else{
+		    				
+		    			}
 		    		}
 		    		else{
-		    			System.out.println("[" + cluster.toJSON() + "]");
 	    				KeyedMessage<String, String> message = new KeyedMessage<String, String>("clusters", DXFeedUtils.getTicker(symbol), "[" + cluster.toJSON() + "]");
 	    				producer.send(message);
 		    		}
@@ -176,10 +191,12 @@ public class ConsumerWorkerThread implements Runnable {
 			    		clusterOut.flush();
 		    		}
 	    		}
-				else if(cluster.isSpreadLeg){
-					// reset the spread count for non-clusters
-					spreadsMap.get(DXFeedUtils.getTicker(symbol)).reset();
-				}
+//				else if(cluster.isSpreadLeg){
+//					synchronized(spreadsMap){
+//						// reset the spread count for non-clusters
+//						spreadsMap.get(DXFeedUtils.getTicker(symbol)).reset();
+//					}
+//				}
 			}catch(NullPointerException e){
 				e.printStackTrace();
 			}
@@ -193,7 +210,7 @@ public class ConsumerWorkerThread implements Runnable {
 	    TimeAndSale t = null;
 	    // contract and ticker symbols
 	    String symbol, ticker;
-	    
+
 	    try{
 	    	while (it.hasNext()){
 	        	byte[] serializedTrade = it.next().message();
@@ -202,7 +219,6 @@ public class ConsumerWorkerThread implements Runnable {
     	    	// convert byte[] to TimeAndSale object
     		    ObjectInputStream is = new ObjectInputStream(in);
     		    t = (TimeAndSale)is.readObject();
-    		    System.out.println(m_threadNumber + "\t" + t);
     		    
     		    symbol = t.getEventSymbol();
     		    ticker = DXFeedUtils.getTicker(symbol);
@@ -240,6 +256,7 @@ public class ConsumerWorkerThread implements Runnable {
 	    		    	timer.schedule(cluster.task, CLUSTER_WAIT_TIME);
 	    		    	
 	    		    	if(t.isSpreadLeg()){
+	    		    		System.out.println(String.format("SPREAD TRADE FOUND\t%s\t%d\t%f\t%f\t%f\t%d", t.getEventSymbol(), t.getTime(), t.getBidPrice(), t.getAskPrice(), t.getPrice(), t.getSize()));
 		    		    	// spread tracking logic, add spread leg for this ticker
 	    		    		synchronized(spreadsMap){
 		    		    		if(!spreadsMap.containsKey(ticker)){
