@@ -34,7 +34,7 @@ import kafka.producer.ProducerConfig;
 import kafka.producer.KeyedMessage;
 
 public class ConsumerWorkerThread implements Runnable {
-    private final int CLUSTER_WAIT_TIME = 1000;
+    private final int CLUSTER_WAIT_TIME = 400;
     private final int CLUSTER_QUANTITY_THRESHOLD = 50;
     private final int CLUSTER_MONEY_THRESHOLD = 50000;
     private final long SUMMARY_TIMEOUT = 200;
@@ -262,7 +262,7 @@ public class ConsumerWorkerThread implements Runnable {
 	    		    		cluster.task.run();
 	    					Cluster newCluster = new Cluster(t);
 	    					newCluster.task = new ClusteringTask(newCluster);
-	    					timer.schedule(newCluster.task, CLUSTER_QUANTITY_THRESHOLD);
+	    					timer.schedule(newCluster.task, CLUSTER_WAIT_TIME);
 	    					synchronized(contractsMap){
 	    						contractsMap.put(symbol, newCluster);
 	    					}
