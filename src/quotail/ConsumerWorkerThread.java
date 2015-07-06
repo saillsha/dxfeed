@@ -44,6 +44,17 @@ public class ConsumerWorkerThread implements Runnable {
     private static Producer<String, String> producer = null;
     public static DXFeed feed = DXFeed.getInstance();
     private static Timer timer;
+    private static Calendar calendar = new GregorianCalendar();
+    private static final long REDIS_KEY_EXPIRY_TIME;
+    
+    static{
+    	// set expiry of redis keys to 9:00 of the following day
+    	calendar.add(Calendar.DATE, 1);
+		calendar.set(Calendar.HOUR, 9);
+		calendar.set(Calendar.MINUTE, 0);
+		calendar.set(Calendar.AM_PM, 0);
+    	REDIS_KEY_EXPIRY_TIME = calendar.getTimeInMillis();
+    }
 
 	private KafkaStream m_stream;
     private int m_threadNumber;
@@ -203,18 +214,21 @@ public class ConsumerWorkerThread implements Runnable {
     		    }
 
     		    // update redis with aggregate counts
-    		    char optionType = t.getEventSymbol().lastIndexOf('C', 6) == -1 ? 'P' : 'C';
-		    	String key = optionType + (t.getAggressorSide() == Side.BUY ? "A" : (t.getAggressorSide() == Side.SELL ? "B" : "M"));
+    		    char optionType = t.getEventSymbol().substring(7).lastIndexOf('C') == -1 ? 'P' : 'C';
+		    	String hashKey = optionType + (t.getAggressorSide() == Side.BUY ? "A" : (t.getAggressorSide() == Side.SELL ? "B" : "M"));
+		    	String redisKey = ticker + "_agg_vol";
 		    	Map<String, String> updatedVol = new HashMap<String, String>();
-		    	if(jedis.exists(ticker)){
-    		    	int aggVol = Integer.parseInt(jedis.hmget(ticker, key).get(0)) + (int)t.getSize();
-    		    	updatedVol.put(key, "" + aggVol);
-    		    }
+		    	if(jedis.exists(redisKey)){
+    		    	int aggVol = Integer.parseInt(jedis.hmget(redisKey, hashKey).get(0)) + (int)t.getSize();
+    		    	updatedVol.put(hashKey, "" + aggVol);
+    		    	jedis.hmset(redisKey, updatedVol);
+		    	}
     		    else{
     		    	updatedVol.putAll(aggVolMap);
-    		    	updatedVol.put(key, "" + (Integer.parseInt(aggVolMap.get(key)) + t.getSize()));
+    		    	updatedVol.put(hashKey, "" + t.getSize());
+    		    	jedis.hmset(redisKey, updatedVol);
+    		    	jedis.expireAt(redisKey, REDIS_KEY_EXPIRY_TIME);
     		    }
-		    	jedis.hmset(ticker, updatedVol);
 
 		    	synchronized(contractsMap){
     		    	if(!contractsMap.containsKey(symbol)){
