@@ -11,7 +11,8 @@ public class DXFeedUtils {
 	static final int END_MIN = 16*60;
 	
 	public static String getHeader(){
-		return "SYMBOL\tTIME\tSEQ\tEX\tSIZE\tPRICE\tBID\tASK\tSIDE\tSPREAD";
+		return String.format("SYMBOL%cTIME%cSEQ%cEX%cSIZE%cPRICE%cBID%cASK%cSIDE%cSPREAD",
+				DELIM, DELIM, DELIM, DELIM, DELIM, DELIM, DELIM, DELIM, DELIM);
 	}
 	
 	public static String serializeTrade(TimeAndSale t){
@@ -34,17 +35,31 @@ public class DXFeedUtils {
     	t.setPrice(Double.parseDouble(fields[5]));
     	t.setBidPrice(Double.parseDouble(fields[6]));
     	t.setAskPrice(Double.parseDouble(fields[7]));
-    	t.setAggressorSide(fields[8] == "BUY" ? Side.BUY : Side.SELL);
+    	t.setAggressorSide(fields[8].equals("BUY") ? Side.BUY : Side.SELL);
     	t.setSpreadLeg(fields[9].equals("true"));
     	return t;
     }
     
-    // expects a contract symbol of the form .VXX150626C19, returns VXX
+    // expects a normalized contract symbol of the form VXX150626C00019000, returns VXX
     public static String getTicker(String contract){
-		// this will be true until ~2018 (when there are 2020 LEAPs)
-    	return contract.substring(1, contract.indexOf('1'));
+    	return contract.substring(0, contract.length() - 15);
     }
 
+    // take something like .AAC150821C22.5 and convert to AAC150821C00022500
+    public static String normalizeContract(String symbol){
+    	int lastC = symbol.lastIndexOf('C');
+    	int lastP = symbol.lastIndexOf('P');
+    	int lastIndex = Math.max(lastP, lastC) + 1;
+    	String normalizedSymbol = symbol.substring(1, lastIndex);
+    	String[] strike = symbol.substring(lastIndex).split("\\.");
+    	String decimal = "000";
+    	if(strike.length > 1){
+    		decimal = strike[1];
+    		for(; decimal.length() < 3; decimal += "0");
+    	}
+    	return String.format("%s%05d%s", normalizedSymbol, Integer.parseInt(strike[0]), decimal);
+    }
+    
     // check if the trade occurred during normal trading hours
     public static boolean isDuringMarketHours(long time){
     	Date d = new Date(time);

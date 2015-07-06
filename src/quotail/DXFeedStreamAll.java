@@ -141,13 +141,13 @@ public class DXFeedStreamAll{
 		sub.addEventListener(new TradeListener());
 		sub.addSymbols(WildcardSymbol.ALL);
 	}
-
+	
 	public class TradeListener implements DXFeedEventListener<TimeAndSale>{
 		public void processTrades(List<TimeAndSale> events){
 			List<KeyedMessage<byte[], byte[]>> trades = new ArrayList<KeyedMessage<byte[], byte[]>>();
 			for (TimeAndSale event : events){
+				event.setEventSymbol(DXFeedUtils.normalizeContract(event.getEventSymbol()));
 				String ticker = DXFeedUtils.getTicker(event.getEventSymbol());
-
 				// we have no interest in parsing trades that are not during normal market hours or are mini contracts
 				if(!DXFeedUtils.isDuringMarketHours(event.getTime()) || DXFeedUtils.isMiniContract(ticker))
 					continue;

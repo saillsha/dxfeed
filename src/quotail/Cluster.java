@@ -2,7 +2,6 @@ package quotail;
 
 import java.util.Iterator;
 import java.util.LinkedList;
-import java.util.Date;
 import java.util.TimerTask;
 
 import com.dxfeed.event.market.Side;
