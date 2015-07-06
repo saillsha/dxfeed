@@ -7,6 +7,7 @@ import java.io.ObjectOutputStream;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.util.*;
+import java.util.Scanner;
 
 // dxfeed imports
 import com.devexperts.util.TimeFormat;
@@ -58,6 +59,7 @@ public class DXFeedStreamAll{
 		Option fromtime = OptionBuilder.withArgName("fromtime").hasArg()
 				.withDescription("UNIX timestamp from which to read timeseries options").create("fromtime");
 		options.addOption(filename);
+		options.addOption("stdin", false, "read in the list of trades from standard input");
 		options.addOption("batch", false, "read the trades from a file in batch mode");
 		options.addOption("timeseries", false, "enable time series subscription to a set of contracts");
 		
@@ -68,7 +70,11 @@ public class DXFeedStreamAll{
 		CommandLineParser parser = new BasicParser();
 		try{
 			CommandLine cmd = parser.parse(options, args);
-			if(cmd.hasOption("file")){
+			if(cmd.hasOption("stdin")){
+				Scanner scanner = new Scanner(System.in);
+				new DXFeedStreamAll(scanner);
+			}
+			else if(cmd.hasOption("file")){
 				new DXFeedStreamAll(cmd.getOptionValue("file"), cmd.hasOption("batch"));
 			}
 			else if(cmd.hasOption("timeseries")){
@@ -84,8 +90,20 @@ public class DXFeedStreamAll{
 		}catch(ParseException e){
 			System.out.println("error parsing arguments");
 			HelpFormatter formatter = new HelpFormatter();
-			formatter.printHelp("<-f FILENAME -batch> | <-timeseries -contracts CONTRACTS -fromtime TIMESTAMP> | <-realtime>", options);
+			formatter.printHelp("<-stdin> | <-f FILENAME -batch> | <-timeseries -contracts CONTRACTS -fromtime TIMESTAMP> | <-realtime>", options);
 			System.exit(1);
+		}
+	}
+	
+	// listener for processing from standard in
+	public DXFeedStreamAll(Scanner in){
+		String line;
+		TradeListener listener = new TradeListener();
+		while((line = in.nextLine()) != "quit"){
+			TimeAndSale t = DXFeedUtils.parseTrade(line);
+			List<TimeAndSale> tns = new ArrayList<TimeAndSale>();
+			tns.add(t);
+			listener.processTrades(tns);
 		}
 	}
 	
