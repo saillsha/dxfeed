@@ -47,6 +47,7 @@ public class DXFeedUtils {
 
     // take something like .AAC150821C22.5 and convert to AAC150821C00022500
     public static String normalizeContract(String symbol){
+    	if(symbol.charAt(0) != '.') return symbol;
     	int lastC = symbol.lastIndexOf('C');
     	int lastP = symbol.lastIndexOf('P');
     	int lastIndex = Math.max(lastP, lastC) + 1;
@@ -58,6 +59,22 @@ public class DXFeedUtils {
     		for(; decimal.length() < 3; decimal += "0");
     	}
     	return String.format("%s%05d%s", normalizedSymbol, Integer.parseInt(strike[0]), decimal);
+    }
+    
+    // take something like AAC150821C00022500 to .AAC150821C22.5
+    public static String denormalizeContract(String symbol){
+    	symbol = "." + symbol;
+    	int lastC = symbol.lastIndexOf('C');
+    	int lastP = symbol.lastIndexOf('P');
+    	int lastIndex = Math.max(lastP, lastC) + 1;
+    	String denormalizedSymbol = symbol.substring(0, lastIndex);
+    	String strike = symbol.substring(lastIndex);
+    	System.out.println(strike);
+    	strike = strike.substring(0, 5) + "." + strike.substring(5);
+    	int i = 0, j = strike.length() - 1;
+    	for(; i < strike.length() && strike.charAt(i) == '0'; ++i);
+    	for(; j >= 0 && strike.charAt(j) == '0' || strike.charAt(j) == '.'; --j);
+    	return denormalizedSymbol + strike.substring(i, j+1);
     }
     
     // check if the trade occurred during normal trading hours
