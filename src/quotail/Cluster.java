@@ -105,31 +105,48 @@ public class Cluster {
 		sb.append(this.openinterest);
 		sb.append(",\"volume\":");
 		sb.append(this.volume);
-		sb.append(",\"trades\":[");
-		for(TimeAndSale t : this.trades){
-			sb.append("{\"time\":");
-			sb.append(t.getTime());
-			sb.append(",\"bid\":");
-			sb.append(t.getBidPrice());
-			sb.append(",\"ask\":");
-			sb.append(t.getAskPrice());
-			sb.append(",\"price\":");
-			sb.append(t.getPrice());
-			sb.append(",\"side\":");
-			sb.append(t.getAggressorSide() == Side.BUY ? "\"B\"" : (t.getAggressorSide() == Side.SELL ? "\"S\"" : "\"U\""));
-			sb.append(",\"exchange\":");
-			sb.append("\"" + t.getExchangeCode() + "\"");
-			sb.append(",\"isSpread\":");
-			sb.append(t.isSpreadLeg());
-			sb.append(",\"size\":");
-			sb.append(t.getSize());
-			sb.append(",\"sequence\":");
-			sb.append(t.getSequence());
-			sb.append("},");
+		sb.append(",\"time\":");
+		TimeAndSale tns = this.trades.get(0);
+		sb.append(tns.getTime());
+		sb.append(",\"bid\":");
+		sb.append(tns.getBidPrice());
+		sb.append(",\"ask\":");
+		sb.append(tns.getAskPrice());
+		sb.append(",\"price\":");
+		sb.append(tns.getPrice());
+		
+		if(this.trades.size() > 1){
+			sb.append(",\"trades\":[");
+			for(TimeAndSale t : this.trades){
+				sb.append("{\"time\":");
+				sb.append(t.getTime());
+				sb.append(",\"bid\":");
+				sb.append(t.getBidPrice());
+				sb.append(",\"ask\":");
+				sb.append(t.getAskPrice());
+				sb.append(",\"price\":");
+				sb.append(t.getPrice());
+				sb.append(",\"side\":");
+				sb.append(t.getAggressorSide() == Side.BUY ? "\"B\"" : (t.getAggressorSide() == Side.SELL ? "\"S\"" : "\"U\""));
+				sb.append(",\"exchange\":");
+				sb.append("\"" + t.getExchangeCode() + "\"");
+				sb.append(",\"isSpread\":");
+				sb.append(t.isSpreadLeg());
+				sb.append(",\"size\":");
+				sb.append(t.getSize());
+				sb.append(",\"sequence\":");
+				sb.append(t.getSequence());
+				sb.append("},");
+			}
+			// remove trailing comma
+			sb.deleteCharAt(sb.length() - 1);
+			sb.append("]");
 		}
-		// remove trailing comma
-		sb.deleteCharAt(sb.length() - 1);
-		sb.append("]}");
+		else{
+			sb.append(",\"trades\": null");
+		}
+
+		sb.append("}");
 		return sb.toString();
 	}
 }
