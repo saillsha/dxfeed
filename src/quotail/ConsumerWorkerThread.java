@@ -2,6 +2,7 @@ package quotail;
 
 import java.util.HashMap;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Timer;
@@ -37,7 +38,7 @@ public class ConsumerWorkerThread implements Runnable {
     private final int CLUSTER_WAIT_TIME = 400;
     private final int CLUSTER_QUANTITY_THRESHOLD = 50;
     private final int CLUSTER_MONEY_THRESHOLD = 50000;
-    private final long SUMMARY_TIMEOUT = 200;
+    private final long SUMMARY_TIMEOUT = 500;
 	private static JedisPool jedisPool = new JedisPool(new JedisPoolConfig(), "localhost");
     private static PrintWriter tradeOut = null;
     private static PrintWriter clusterOut = null;
@@ -61,7 +62,7 @@ public class ConsumerWorkerThread implements Runnable {
 
     private HashMap<String, Cluster> contractsMap;
     private Map<String, String> aggVolMap = new HashMap<String, String>();
-    private HashMap<String, SpreadTracker> spreadsMap = new HashMap<String, SpreadTracker>();
+    SpreadTracker spreadTracker = new SpreadTracker();
     
     public void configureKafkaProducer(){
     	Properties props = new Properties();
@@ -98,52 +99,19 @@ public class ConsumerWorkerThread implements Runnable {
         	e.printStackTrace();
         }
     }
-
-    // class manages the number of legs in a spread and the number that have been processed
-    // a spread will only be pushed out to kafka when all of its legs have been processed
-    private class SpreadTracker {
-    	public LinkedBlockingQueue<Cluster> legs = new LinkedBlockingQueue<Cluster>();
-    	public int numProcessed = 0;
-    	public SpreadTracker(Cluster cluster){
-    		legs.offer(cluster);
-    	}
-    	public void reset(){
-    		legs.clear();
-    		numProcessed = 0;
-    	}
-    	public void addLeg(Cluster cluster){
-    		if(Math.abs( cluster.trades.get(0).getTime() - legs.peek().trades.get(0).getTime() ) > CLUSTER_WAIT_TIME){
-    			this.reset();
-    		}
-    		legs.offer(cluster);
-    	}
-    	public void incrProcessed(){ ++this.numProcessed; }
-    	public String toString(){
-    		StringBuilder sb = new StringBuilder();
-    		sb.append("[");
-    		for(Cluster cluster : legs){
-    			sb.append(cluster.toJSON());
-    			sb.append(",");
-    		}
-    		sb.deleteCharAt(sb.length() - 1);
-    		sb.append("]");
-    		return sb.toString();
-    	}
-    	public boolean isProcessed(){ return numProcessed == legs.size(); }
-    }
     
     private class ClusteringTask extends TimerTask{
     	private Cluster cluster;
     	private String symbol;
     	private String ticker;
-    	private SpreadTracker spread;
+    	private Bin bin;
     	public ClusteringTask(Cluster cluster){
     		this.cluster = cluster;
     		this.symbol = cluster.trades.getFirst().getEventSymbol();
     		this.ticker = DXFeedUtils.getTicker(symbol);
     	}
     	
-    	public void addSpread(SpreadTracker spread){ this.spread = spread; }
+    	public void addBin(Bin bin){ this.bin = bin; }
     	
     	public void run(){
     		try{
@@ -153,28 +121,32 @@ public class ConsumerWorkerThread implements Runnable {
 				if(cluster.quantity >= CLUSTER_QUANTITY_THRESHOLD){
 		    		
 					cluster.classifyCluster();
-		    		Promise<Summary> summaryPromise = feed.getLastEventPromise(Summary.class, symbol);
+					String denormalizedSymbol = DXFeedUtils.denormalizeContract(symbol);
+		    		Promise<Summary> summaryPromise = feed.getLastEventPromise(Summary.class, denormalizedSymbol);
 		    		if(summaryPromise.awaitWithoutException(SUMMARY_TIMEOUT, TimeUnit.MILLISECONDS)){
 			    		cluster.openinterest = summaryPromise.getResult().getOpenInterest();
 		    		}
-		    		Promise<Trade> tradePromise = feed.getLastEventPromise(Trade.class, symbol);
+		    		Promise<Trade> tradePromise = feed.getLastEventPromise(Trade.class, denormalizedSymbol);
 		    		if(tradePromise.awaitWithoutException(SUMMARY_TIMEOUT, TimeUnit.MILLISECONDS)){
 		    			cluster.volume = (int)tradePromise.getResult().getDayVolume();
 		    		}
-	    			System.out.println("[" + cluster.toJSON() + "]");
+	    			System.out.println("CLUSTER FOUND" + "[" + cluster.toJSON() + "]");
 		    		if(cluster.isSpreadLeg){
 		    			boolean isSpreadProcessed;
-		    			synchronized(spreadsMap){
-			    			System.out.println(String.format("SPREAD CLUSTER FOUND (%d/%d)\t%s\t%d\t%f\t%f\t%f\t%d", spread.numProcessed, spread.legs.size(),
+		    			synchronized(bin){
+		    				if(bin == null){
+		    					System.out.println("NULL SPREAD " + ticker);
+		    				}
+			    			System.out.println(String.format("SPREAD CLUSTER FOUND (%d/%d)\t%s\t%d\t%f\t%f\t%f\t%d", bin.numProcessed, bin.legs.size(),
 			    					cluster.trades.get(0).getEventSymbol(), cluster.trades.get(0).getTime(), cluster.trades.get(0).getBidPrice(),
 			    					cluster.trades.get(0).getAskPrice(), cluster.trades.get(0).getPrice(), cluster.quantity));
-		    				spread.incrProcessed();
-		    				isSpreadProcessed = spread.isProcessed();
-		    				if(isSpreadProcessed) spreadsMap.remove(ticker);
+		    				bin.incrProcessed();
+		    				isSpreadProcessed = bin.isProcessed();
+		    				if(isSpreadProcessed) spreadTracker.removeBin(bin, ticker);
 		    			}
 		    			if(isSpreadProcessed){
-			    			System.out.println("Spread PROCESSED: " + spread.toString());
-		    				KeyedMessage<String, String> message = new KeyedMessage<String, String>("clusters", DXFeedUtils.getTicker(symbol), spread.toString());
+			    			System.out.println("Spread PROCESSED: " + bin.toString());
+		    				KeyedMessage<String, String> message = new KeyedMessage<String, String>("clusters", DXFeedUtils.getTicker(symbol), bin.toString());
 		    				producer.send(message);
 		    			}
 		    			else{
@@ -199,6 +171,8 @@ public class ConsumerWorkerThread implements Runnable {
 //				}
 			}catch(NullPointerException e){
 				e.printStackTrace();
+			}catch(Exception e){
+				e.printStackTrace();
 			}
     	}
     }
@@ -219,7 +193,8 @@ public class ConsumerWorkerThread implements Runnable {
     	    	// convert byte[] to TimeAndSale object
     		    ObjectInputStream is = new ObjectInputStream(in);
     		    t = (TimeAndSale)is.readObject();
-    		    
+    		    t.setEventSymbol(DXFeedUtils.normalizeContract(t.getEventSymbol()));
+//    		    System.out.println(t);
     		    symbol = t.getEventSymbol();
     		    ticker = DXFeedUtils.getTicker(symbol);
     		    // invalid trade if size 0, continue
@@ -235,7 +210,9 @@ public class ConsumerWorkerThread implements Runnable {
 		    	String redisKey = ticker + "_agg_vol";
 		    	Map<String, String> updatedVol = new HashMap<String, String>();
 		    	if(jedis.exists(redisKey)){
-    		    	int aggVol = Integer.parseInt(jedis.hmget(redisKey, hashKey).get(0)) + (int)t.getSize();
+		    		String agg_vol = jedis.hmget(redisKey, hashKey).get(0);
+		    		agg_vol = agg_vol == null ? "0" : agg_vol;
+    		    	int aggVol = Integer.parseInt(agg_vol) + (int)t.getSize();
     		    	updatedVol.put(hashKey, "" + aggVol);
     		    	jedis.hmset(redisKey, updatedVol);
 		    	}
@@ -249,40 +226,15 @@ public class ConsumerWorkerThread implements Runnable {
 		    	synchronized(contractsMap){
     		    	if(!contractsMap.containsKey(symbol)){
     		    		// create new cluster for this trade if none exists yet for the contract
-	    		    	Cluster cluster = new Cluster(t);
-	    		    	ClusteringTask clusterTask = new ClusteringTask(cluster);
-	    		    	cluster.task = clusterTask;
-	    		    	contractsMap.put(symbol, cluster);
-	    		    	timer.schedule(cluster.task, CLUSTER_WAIT_TIME);
-	    		    	
-	    		    	if(t.isSpreadLeg()){
-	    		    		System.out.println(String.format("SPREAD TRADE FOUND\t%s\t%d\t%f\t%f\t%f\t%d", t.getEventSymbol(), t.getTime(), t.getBidPrice(), t.getAskPrice(), t.getPrice(), t.getSize()));
-		    		    	// spread tracking logic, add spread leg for this ticker
-	    		    		synchronized(spreadsMap){
-		    		    		if(!spreadsMap.containsKey(ticker)){
-		    		    			SpreadTracker spread = new SpreadTracker(cluster);
-			    		    		spreadsMap.put(ticker, spread);
-			    		    		clusterTask.addSpread(spread);
-		    		    		}
-		    		    		else{
-			    		    		spreadsMap.get(ticker).addLeg(cluster);
-			    		    		clusterTask.addSpread(spreadsMap.get(ticker));
-		    		    		}
-		    		    	}
-	    		    	}
+    		    		createCluster(t, symbol, ticker);
 	    		    }
 	    		    else{
 	    		    	Cluster cluster = contractsMap.get(symbol);
-	    		    	if(Math.abs(t.getTime() - cluster.trades.getFirst().getTime()) > CLUSTER_WAIT_TIME){
-	    		    		// most recent cluster is outside the cluster interval, so cancel timer and being processing right away
+	    		    	if(Math.abs(t.getTime() - cluster.trades.getFirst().getTime()) > CLUSTER_WAIT_TIME || cluster.isSpreadLeg != t.isSpreadLeg()){
+	    		    		// most recent cluster is outside the cluster interval, or we found a mismatch in spreads, so cancel timer and being processing right away
 	    		    		cluster.task.cancel();
 	    		    		cluster.task.run();
-	    					Cluster newCluster = new Cluster(t);
-	    					newCluster.task = new ClusteringTask(newCluster);
-	    					timer.schedule(newCluster.task, CLUSTER_WAIT_TIME);
-	    					synchronized(contractsMap){
-	    						contractsMap.put(symbol, newCluster);
-	    					}
+	    		    		createCluster(t, symbol, ticker);
 	    		    	}
 	    		    	else{
 	    		    		contractsMap.get(symbol).addTrade(t);
@@ -301,10 +253,44 @@ public class ConsumerWorkerThread implements Runnable {
 	    catch(ClassNotFoundException e){
 	    	e.printStackTrace();
 	    }
+	    catch(Exception e){
+	    	e.printStackTrace();
+	    }
 	    finally{
 		    tradeOut.close();
 		    jedis.close();
 	    }
         System.out.println("Shutting down Thread: " + m_threadNumber);
+    }
+    
+    private void createCluster(TimeAndSale t, String symbol, String ticker){
+    	Cluster cluster = new Cluster(t);
+    	ClusteringTask clusterTask = new ClusteringTask(cluster);
+    	cluster.task = clusterTask;
+    	contractsMap.put(symbol, cluster);
+    	if(t.isSpreadLeg()){
+	    	// spread tracking logic, add spread leg for this ticker
+    		synchronized(spreadTracker){
+    			if(t.getSize() > CLUSTER_QUANTITY_THRESHOLD){
+					System.out.println(String.format("NEW SPREAD TRADE FOUND\t%s\t%d\t%f\t%f\t%f\t%d", t.getEventSymbol(), t.getTime(), t.getBidPrice(), t.getAskPrice(), t.getPrice(), t.getSize()));
+				}
+//    			if(!spreadsMap.containsKey(ticker)){
+//
+//    				spread = new SpreadTracker();
+//		    		spreadsMap.put(ticker, spread);
+//	    		}
+//	    		else{
+//    				if(t.getSize() > CLUSTER_QUANTITY_THRESHOLD){
+//    					System.out.println(String.format("NEW SPREAD TRADE FOUND\t%s\t%d\t%f\t%f\t%f\t%d", t.getEventSymbol(), t.getTime(), t.getBidPrice(), t.getAskPrice(), t.getPrice(), t.getSize()));
+//    				}
+//	    			spread = spreadsMap.get(ticker);
+//	    			System.out.println(String.format("OLD SPREAD TRADE FOUND (%d)\t%s\t%d\t%f\t%f\t%f\t%d", spread.legs.size(), t.getEventSymbol(), t.getTime(), t.getBidPrice(), t.getAskPrice(), t.getPrice(), t.getSize()));	    			
+//	    			spread.addCluster(cluster);
+//	    		}
+    			Bin bin = spreadTracker.addCluster(cluster);
+    			clusterTask.addBin(bin);
+    		}
+    	}
+    	timer.schedule(clusterTask, CLUSTER_WAIT_TIME);
     }
 }
