@@ -32,7 +32,8 @@ public class DXFeedStreamAll{
 	public enum Mode{
 		REALTIME, TIMESERIES, FILE
 	}
-	
+	public boolean isFileMode = false;
+	static final String TOPIC_NAME = "timeandsales";
 	public static void main(String[] args){
 		// config block for kafka producer
 		// http://kafka.apache.org/documentation.html#topic-configs
@@ -109,6 +110,7 @@ public class DXFeedStreamAll{
 	
 	// constructor for file based streaming
 	public DXFeedStreamAll(String filename, boolean isBatch){
+		isFileMode = true;
 		try{
 			TradeListener listener = new TradeListener();
 			BufferedReader reader = new BufferedReader(new FileReader(filename));
@@ -165,11 +167,13 @@ public class DXFeedStreamAll{
 			List<KeyedMessage<byte[], byte[]>> trades = new ArrayList<KeyedMessage<byte[], byte[]>>();
 			for (TimeAndSale event : events){
 				event.setEventSymbol(DXFeedUtils.normalizeContract(event.getEventSymbol()));
+				if(isFileMode){
+					event.setTime(System.currentTimeMillis());
+				}
 				String ticker = DXFeedUtils.getTicker(event.getEventSymbol());
 				// we have no interest in parsing trades that are not during normal market hours or are mini contracts
-				if(!DXFeedUtils.isDuringMarketHours(event.getTime()) || DXFeedUtils.isMiniContract(ticker))
+				if(!(isFileMode || DXFeedUtils.isDuringMarketHours(event.getTime())) || DXFeedUtils.isMiniContract(ticker))
 					continue;
-
 		        ByteArrayOutputStream b = new ByteArrayOutputStream();
 				try{
 			        ObjectOutputStream o = new ObjectOutputStream(b);
@@ -178,8 +182,9 @@ public class DXFeedStreamAll{
 				catch(IOException e){
 					e.printStackTrace();
 				}
-				trades.add(new KeyedMessage<byte[], byte[]>("timeandsales", ticker.getBytes(), b.toByteArray()));
 				System.out.println(++counter + "\t" + event);
+				trades.add(new KeyedMessage<byte[], byte[]>(TOPIC_NAME, ticker.getBytes(), b.toByteArray()));
+
 			}
 			producer.send(trades);
 		}

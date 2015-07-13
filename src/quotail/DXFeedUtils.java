@@ -69,7 +69,6 @@ public class DXFeedUtils {
     	int lastIndex = Math.max(lastP, lastC) + 1;
     	String denormalizedSymbol = symbol.substring(0, lastIndex);
     	String strike = symbol.substring(lastIndex);
-    	System.out.println(strike);
     	strike = strike.substring(0, 5) + "." + strike.substring(5);
     	int i = 0, j = strike.length() - 1;
     	for(; i < strike.length() && strike.charAt(i) == '0'; ++i);
@@ -81,6 +80,7 @@ public class DXFeedUtils {
     public static boolean isDuringMarketHours(long time){
     	Date d = new Date(time);
 		int minutes = d.getHours() * 60 + d.getMinutes();
+		System.out.println(minutes >= START_MIN && minutes < END_MIN);
 		return minutes >= START_MIN && minutes < END_MIN;
     }
 

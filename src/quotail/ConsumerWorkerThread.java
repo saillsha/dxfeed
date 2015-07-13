@@ -112,6 +112,9 @@ public class ConsumerWorkerThread implements Runnable {
     	}
     	
     	public void addBin(Bin bin){ this.bin = bin; }
+    	private long elapsedTime(){
+    		return System.currentTimeMillis() - cluster.trades.get(0).getTime();
+    	}
     	
     	public void run(){
     		try{
@@ -130,13 +133,10 @@ public class ConsumerWorkerThread implements Runnable {
 		    		if(tradePromise.awaitWithoutException(SUMMARY_TIMEOUT, TimeUnit.MILLISECONDS)){
 		    			cluster.volume = (int)tradePromise.getResult().getDayVolume();
 		    		}
-	    			System.out.println("CLUSTER FOUND" + "[" + cluster.toJSON() + "]");
+	    			System.out.println("CLUSTER FOUND (" + elapsedTime() + "ms) [" + cluster.toJSON() + "]");
 		    		if(cluster.isSpreadLeg){
 		    			boolean isSpreadProcessed;
 		    			synchronized(bin){
-		    				if(bin == null){
-		    					System.out.println("NULL SPREAD " + ticker);
-		    				}
 			    			System.out.println(String.format("SPREAD CLUSTER FOUND (%d/%d)\t%s\t%d\t%f\t%f\t%f\t%d", bin.numProcessed, bin.legs.size(),
 			    					cluster.trades.get(0).getEventSymbol(), cluster.trades.get(0).getTime(), cluster.trades.get(0).getBidPrice(),
 			    					cluster.trades.get(0).getAskPrice(), cluster.trades.get(0).getPrice(), cluster.quantity));
@@ -145,7 +145,7 @@ public class ConsumerWorkerThread implements Runnable {
 		    				if(isSpreadProcessed) spreadTracker.removeBin(bin, ticker);
 		    			}
 		    			if(isSpreadProcessed){
-			    			System.out.println("Spread PROCESSED: " + bin.toString());
+			    			System.out.println("Spread PROCESSED: (" + elapsedTime() + "ms)" + bin.toString());
 		    				KeyedMessage<String, String> message = new KeyedMessage<String, String>("clusters", DXFeedUtils.getTicker(symbol), bin.toString());
 		    				producer.send(message);
 		    			}
