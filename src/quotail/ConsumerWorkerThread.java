@@ -201,7 +201,9 @@ public class ConsumerWorkerThread implements Runnable {
     		    if(t.getSize() == 0) continue;
     		    if(tradeOut != null){
     		    	// print trade out to file if enabled in run-time options
-    		    	tradeOut.println(DXFeedUtils.serializeTrade(t));
+    		    	synchronized(tradeOut){
+    		    		tradeOut.println(DXFeedUtils.serializeTrade(t));
+    		    	}
     		    }
 
     		    // update redis with aggregate counts
