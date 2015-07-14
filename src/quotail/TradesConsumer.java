@@ -39,11 +39,9 @@ public class TradesConsumer {
         List<KafkaStream<byte[], byte[]>> streams = consumerMap.get(topic);
  
         // now launch all the threads
-        //
         executor = Executors.newFixedThreadPool(a_numThreads);
  
         // now create an object to consume the messages
-        //
         int threadNumber = 0;
         for (final KafkaStream stream : streams) {
             executor.submit(new ConsumerWorkerThread(stream, threadNumber, tradeFile, clusterFile));

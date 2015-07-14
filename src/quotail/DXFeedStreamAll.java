@@ -32,7 +32,7 @@ public class DXFeedStreamAll{
 	public enum Mode{
 		REALTIME, TIMESERIES, FILE
 	}
-	public boolean isFileMode = false;
+	public static boolean isFileMode = false;
 	static final String TOPIC_NAME = "timeandsales";
 	public static void main(String[] args){
 		// config block for kafka producer
@@ -63,6 +63,7 @@ public class DXFeedStreamAll{
 		options.addOption("stdin", false, "read in the list of trades from standard input");
 		options.addOption("batch", false, "read the trades from a file in batch mode");
 		options.addOption("timeseries", false, "enable time series subscription to a set of contracts");
+		options.addOption("use_current_time", false, "update the time stamp of the trades to the current time, useful for timing the latency");
 		
 		options.addOption(contracts);
 		options.addOption(fromtime);
@@ -77,6 +78,7 @@ public class DXFeedStreamAll{
 			}
 			else if(cmd.hasOption("file")){
 				new DXFeedStreamAll(cmd.getOptionValue("file"), cmd.hasOption("batch"));
+				isFileMode = cmd.hasOption("use_current_time");
 			}
 			else if(cmd.hasOption("timeseries")){
 				if(!cmd.hasOption("contracts") || !cmd.hasOption("fromtime")){
@@ -110,7 +112,6 @@ public class DXFeedStreamAll{
 	
 	// constructor for file based streaming
 	public DXFeedStreamAll(String filename, boolean isBatch){
-		isFileMode = true;
 		try{
 			TradeListener listener = new TradeListener();
 			BufferedReader reader = new BufferedReader(new FileReader(filename));

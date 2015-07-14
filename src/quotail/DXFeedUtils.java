@@ -8,7 +8,7 @@ public class DXFeedUtils {
 	final static int NUM_FIELDS = 10;
 	final static char DELIM = '\t';
 	static final int START_MIN = 9*60 + 30;
-	static final int END_MIN = 16*60;
+	static final int END_MIN = 16*60 + 15;
 	
 	public static String getHeader(){
 		return String.format("SYMBOL%cTIME%cSEQ%cEX%cSIZE%cPRICE%cBID%cASK%cSIDE%cSPREAD",
@@ -80,7 +80,6 @@ public class DXFeedUtils {
     public static boolean isDuringMarketHours(long time){
     	Date d = new Date(time);
 		int minutes = d.getHours() * 60 + d.getMinutes();
-		System.out.println(minutes >= START_MIN && minutes < END_MIN);
 		return minutes >= START_MIN && minutes < END_MIN;
     }
 
