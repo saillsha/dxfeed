@@ -12,18 +12,19 @@ public class Cluster {
 	LinkedList<TimeAndSale> trades;
 	// This is important for proper categorization
 	public int quantity = 0;
-	// TimerTask for processing this cluster
-	public TimerTask task;
 	public boolean isSpreadLeg = false;
 	public long openinterest = -1;
 	public int volume = -1;
 	public float money = 0;
 	public Side classification;
-	
+	public Bin bin;
+	public boolean isProcessed = false;
+	public long creationTime;
 	public Cluster(TimeAndSale t){
 		isSpreadLeg = t.isSpreadLeg();
 		trades = new LinkedList<TimeAndSale>();
 		addTrade(t);
+		creationTime = System.currentTimeMillis();
 	}
 	
 	// insert the trade in its proper place based on the sequence field

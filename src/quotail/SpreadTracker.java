@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
-//class manages the number of legs in a spread and the number that have been processed
+// class manages the number of legs in a spread and the number that have been processed
 // a spread will only be pushed out to kafka when all of its legs have been processed
 public class SpreadTracker {
 	HashMap<String, LinkedBlockingQueue<Bin>> spreads = new HashMap<String, LinkedBlockingQueue<Bin>>();

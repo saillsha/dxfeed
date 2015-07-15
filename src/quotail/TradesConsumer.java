@@ -12,39 +12,41 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class TradesConsumer {
     private final ConsumerConnector consumer;
     private final String topic;
     private  ExecutorService executor;
-    private static String tradeFile = null, clusterFile = null;
-    private static int numThreads = 2;
+    private static String clusterFile = null;
+    private static int numPartitions = 2;
     private static String zookeeperUrl = "localhost:2181";
-    
+
     public TradesConsumer(String a_groupId, String a_topic, String zookeeperUrl) {
         consumer = kafka.consumer.Consumer.createJavaConsumerConnector(
                 createConsumerConfig(zookeeperUrl, a_groupId));
         this.topic = a_topic;
     }
- 
+
     public void shutdown() {
         if (consumer != null) consumer.shutdown();
         if (executor != null) executor.shutdown();
     }
- 
-    public void run(int a_numThreads) {
+
+    public void run() {
         Map<String, Integer> topicCountMap = new HashMap<String, Integer>();
-        topicCountMap.put(topic, new Integer(a_numThreads));
+        topicCountMap.put(topic, new Integer(numPartitions));
         Map<String, List<KafkaStream<byte[], byte[]>>> consumerMap = consumer.createMessageStreams(topicCountMap);
         List<KafkaStream<byte[], byte[]>> streams = consumerMap.get(topic);
- 
-        // now launch all the threads
-        executor = Executors.newFixedThreadPool(a_numThreads);
- 
-        // now create an object to consume the messages
+
         int threadNumber = 0;
         for (final KafkaStream stream : streams) {
-            executor.submit(new ConsumerWorkerThread(stream, threadNumber, tradeFile, clusterFile));
+        	HashMap<String, Cluster> clusterMap = new HashMap<String, Cluster>();
+        	LinkedBlockingQueue<Cluster> clusterQueue = new LinkedBlockingQueue<Cluster>();
+        	SpreadTracker spreadTracker = new SpreadTracker();
+        	ClusterConsumer clusterConsumer = new ClusterConsumer(clusterQueue, clusterMap, spreadTracker, clusterFile);
+        	new Thread(new ClusterProducer(stream, threadNumber, clusterQueue, clusterMap, spreadTracker, clusterConsumer)).start();
+            new Thread(clusterConsumer).start();
             threadNumber++;
         }
     }
@@ -62,35 +64,32 @@ public class TradesConsumer {
  
 	static void processOptions(String[] args){
 		Options options = new Options();
-		Option tradefile = OptionBuilder.withArgName("tradefile").hasArg()
-				.withDescription("the file path to which you want to write trades")
-				.create("tradefile");
 		Option clusterfile = OptionBuilder.withArgName("clusterfile").hasArg()
 				.withDescription("command separated list of contracts to subscribe to when in time series mode")
 				.create("clusterfile");
-		Option threads = OptionBuilder.withArgName("threads").hasArg()
-				.withDescription("number of threads to use for processing").create("threads");
+		Option partitions = OptionBuilder.withArgName("partitions").hasArg()
+				.withDescription("number of partitions in the kafka topic").create("partitions");
 		Option zookeeper = OptionBuilder.withArgName("zookeeper").hasArg()
 				.withDescription("host of zookeeper server").create("zookeeper");
-		options.addOption(tradefile);
+		options.addOption("drainqueue", false, "passively read in the kafka queue to quickly drain it");
 		options.addOption(clusterfile);
-		options.addOption(threads);
+		options.addOption(partitions);
 		options.addOption(zookeeper);
+		
 		CommandLineParser parser = new BasicParser();
 		try{
 			CommandLine cmd = parser.parse(options, args);
-			if(cmd.hasOption("tradefile"))
-				tradeFile = cmd.getOptionValue("tradefile");
 			if(cmd.hasOption("clusterfile"))
 				clusterFile = cmd.getOptionValue("clusterFile");
-			if(cmd.hasOption("threads"))
-				numThreads = Integer.parseInt(cmd.getOptionValue("threads"));
+			if(cmd.hasOption("partitions"))
+				numPartitions = Integer.parseInt(cmd.getOptionValue("partitions"));
 			if(cmd.hasOption("zookeeper"))
 				zookeeperUrl = cmd.getOptionValue("zookeeper");
 		}catch(ParseException e){
 			System.out.println("error parsing arguments");
+			e.printStackTrace();
 			HelpFormatter formatter = new HelpFormatter();
-			formatter.printHelp("<-tradefile FILENAME> <-clusterfile FILENAME> <-threads NUMBER> <-zookeeper URL>", options);
+			formatter.printHelp("<-clusterfile FILENAME> <-partitions NUMBER> <-zookeeper URL> <--drainqueue>", options);
 			System.exit(1);
 		}
 	}
@@ -100,8 +99,8 @@ public class TradesConsumer {
         String groupId = "timeandsalesConsumer";
         String topic = "timeandsales";
 
-        TradesConsumer example = new TradesConsumer(groupId, topic, zookeeperUrl);
-        example.run(numThreads);
+        TradesConsumer tradesConsumer = new TradesConsumer(groupId, topic, zookeeperUrl);
+        tradesConsumer.run();
 //        try {
 //            Thread.sleep(10000);
 //        } catch (InterruptedException ie) {

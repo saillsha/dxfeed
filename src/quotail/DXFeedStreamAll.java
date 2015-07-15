@@ -6,8 +6,10 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.io.PrintWriter;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.util.*;
-import java.util.Scanner;
 
 // dxfeed imports
 import com.devexperts.util.TimeFormat;
@@ -32,8 +34,9 @@ public class DXFeedStreamAll{
 	public enum Mode{
 		REALTIME, TIMESERIES, FILE
 	}
-	public static boolean isFileMode = false;
+	public static boolean updateTradeTime = false;
 	static final String TOPIC_NAME = "timeandsales";
+	static PrintWriter tradeOut = null;
 	public static void main(String[] args){
 		// config block for kafka producer
 		// http://kafka.apache.org/documentation.html#topic-configs
@@ -54,17 +57,20 @@ public class DXFeedStreamAll{
 		Option filename = OptionBuilder.withArgName("file").hasArg()
 				.withDescription("the file path from which to read trades")
 				.create("file");
+		Option outfile = OptionBuilder.withArgName("outfile").hasArg()
+				.withDescription("the file path to which trades are written")
+				.create("outfile");
 		Option contracts = OptionBuilder.withArgName("contracts").hasArg()
 				.withDescription("command separated list of contracts to subscribe to when in time series mode")
 				.create("contracts");
 		Option fromtime = OptionBuilder.withArgName("fromtime").hasArg()
 				.withDescription("UNIX timestamp from which to read timeseries options").create("fromtime");
 		options.addOption(filename);
+		options.addOption(outfile);
 		options.addOption("stdin", false, "read in the list of trades from standard input");
 		options.addOption("batch", false, "read the trades from a file in batch mode");
 		options.addOption("timeseries", false, "enable time series subscription to a set of contracts");
 		options.addOption("use_current_time", false, "update the time stamp of the trades to the current time, useful for timing the latency");
-		
 		options.addOption(contracts);
 		options.addOption(fromtime);
 		options.addOption("realtime", false, "real-time subscription (default)");
@@ -72,13 +78,17 @@ public class DXFeedStreamAll{
 		CommandLineParser parser = new BasicParser();
 		try{
 			CommandLine cmd = parser.parse(options, args);
+
+			if(cmd.hasOption("outfile")){
+        		tradeOut = new PrintWriter(new BufferedWriter(new FileWriter(cmd.getOptionValue("outfile"), true)));
+			}			
 			if(cmd.hasOption("stdin")){
 				Scanner scanner = new Scanner(System.in);
 				new DXFeedStreamAll(scanner);
 			}
 			else if(cmd.hasOption("file")){
+				updateTradeTime = cmd.hasOption("use_current_time");
 				new DXFeedStreamAll(cmd.getOptionValue("file"), cmd.hasOption("batch"));
-				isFileMode = cmd.hasOption("use_current_time");
 			}
 			else if(cmd.hasOption("timeseries")){
 				if(!cmd.hasOption("contracts") || !cmd.hasOption("fromtime")){
@@ -93,7 +103,11 @@ public class DXFeedStreamAll{
 		}catch(ParseException e){
 			System.out.println("error parsing arguments");
 			HelpFormatter formatter = new HelpFormatter();
-			formatter.printHelp("<-stdin> | <-f FILENAME -batch> | <-timeseries -contracts CONTRACTS -fromtime TIMESTAMP> | <-realtime>", options);
+			formatter.printHelp("<-stdin> | <-f FILENAME -batch> | <-timeseries -contracts CONTRACTS -fromtime TIMESTAMP> | <--realtime> | <--use_current_time>", options);
+			System.exit(1);
+		} catch (IOException e) {
+			System.out.println("Unable to open file for writing trades");
+			e.printStackTrace();
 			System.exit(1);
 		}
 	}
@@ -168,12 +182,13 @@ public class DXFeedStreamAll{
 			List<KeyedMessage<byte[], byte[]>> trades = new ArrayList<KeyedMessage<byte[], byte[]>>();
 			for (TimeAndSale event : events){
 				event.setEventSymbol(DXFeedUtils.normalizeContract(event.getEventSymbol()));
-				if(isFileMode){
+				if(updateTradeTime){
+					// set time of trade to current time for measuring latency purposes
 					event.setTime(System.currentTimeMillis());
 				}
 				String ticker = DXFeedUtils.getTicker(event.getEventSymbol());
 				// we have no interest in parsing trades that are not during normal market hours or are mini contracts
-				if(!(isFileMode || DXFeedUtils.isDuringMarketHours(event.getTime())) || DXFeedUtils.isMiniContract(ticker))
+				if(!(updateTradeTime || DXFeedUtils.isDuringMarketHours(event.getTime())) || DXFeedUtils.isMiniContract(ticker))
 					continue;
 		        ByteArrayOutputStream b = new ByteArrayOutputStream();
 				try{
@@ -184,8 +199,10 @@ public class DXFeedStreamAll{
 					e.printStackTrace();
 				}
 				System.out.println(++counter + "\t" + event);
+				if(tradeOut != null){
+		    		tradeOut.println(DXFeedUtils.serializeTrade(event));
+				}
 				trades.add(new KeyedMessage<byte[], byte[]>(TOPIC_NAME, ticker.getBytes(), b.toByteArray()));
-
 			}
 			producer.send(trades);
 		}
