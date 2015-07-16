@@ -35,7 +35,7 @@ public class DXFeedStreamAll{
 		REALTIME, TIMESERIES, FILE
 	}
 	public static boolean updateTradeTime = false;
-	static final String TOPIC_NAME = "timeandsales";
+	static final String TOPIC_NAME = "timeandsales4";
 	static PrintWriter tradeOut = null;
 	public static void main(String[] args){
 		// config block for kafka producer

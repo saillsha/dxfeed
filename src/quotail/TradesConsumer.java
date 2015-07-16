@@ -97,7 +97,7 @@ public class TradesConsumer {
     public static void main(String[] args) {
     	processOptions(args);
         String groupId = "timeandsalesConsumer";
-        String topic = "timeandsales";
+        String topic = "timeandsales4";
 
         TradesConsumer tradesConsumer = new TradesConsumer(groupId, topic, zookeeperUrl);
         tradesConsumer.run();
