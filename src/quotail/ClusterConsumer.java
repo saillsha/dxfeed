@@ -100,12 +100,12 @@ public class ClusterConsumer implements Runnable{
 		cluster.isProcessed = true;
 		String symbol = cluster.trades.getFirst().getEventSymbol();
 		String ticker = DXFeedUtils.getTicker(symbol);
-		Bin bin = cluster.bin;
 		try{
     		synchronized(clusterMap){
 				clusterMap.remove(symbol);
     		}
-			if(cluster.quantity >= CLUSTER_QUANTITY_THRESHOLD){
+
+    		if(cluster.quantity >= CLUSTER_QUANTITY_THRESHOLD){
 				cluster.classifyCluster();
 				String denormalizedSymbol = DXFeedUtils.denormalizeContract(symbol);
 	    		Promise<Summary> summaryPromise = feed.getLastEventPromise(Summary.class, denormalizedSymbol);
@@ -118,29 +118,11 @@ public class ClusterConsumer implements Runnable{
 	    		}
     			System.out.println("CLUSTER FOUND (" + elapsedTime(cluster) + "ms) [" + cluster.toJSON() + "]");
 	    		if(cluster.isSpreadLeg){
-	    			boolean isSpreadProcessed;
-	    			String spreadStr;
-	    			synchronized(bin){
-		    			System.out.println(String.format("SPREAD CLUSTER FOUND (%d/%d)\t%s\t%d\t%f\t%f\t%f\t%d", bin.numProcessed, bin.legs.size(),
-		    					cluster.trades.get(0).getEventSymbol(), cluster.trades.get(0).getTime(), cluster.trades.get(0).getBidPrice(),
-		    					cluster.trades.get(0).getAskPrice(), cluster.trades.get(0).getPrice(), cluster.quantity));
-	    				bin.incrProcessed();
-	    				isSpreadProcessed = bin.isProcessed();
-	    				spreadStr = bin.toString();
-	    				if(isSpreadProcessed) spreadTracker.removeBin(bin, ticker);
-	    			}
-	    			if(isSpreadProcessed){
-		    			System.out.println("Spread PROCESSED: (" + spreadStr + "ms)" + bin.toString());
-	    				KeyedMessage<String, String> message = new KeyedMessage<String, String>("clusters", DXFeedUtils.getTicker(symbol), spreadStr);
-	    				producer.send(message);
-	    			}
-	    			else{
-	    				
-	    			}
+	    			processSpreadLeg(cluster, ticker);
 	    		}
 	    		else{
-    				KeyedMessage<String, String> message = new KeyedMessage<String, String>("clusters", DXFeedUtils.getTicker(symbol), "[" + cluster.toJSON() + "]");
-    				producer.send(message);
+	    			KeyedMessage<String, String> message = new KeyedMessage<String, String>("clusters", DXFeedUtils.getTicker(symbol), "[" + cluster.toJSON() + "]");
+	    			producer.send(message);
 	    		}
 	    		if(clusterOut != null){
 	    			// write out cluster to file
@@ -148,15 +130,43 @@ public class ClusterConsumer implements Runnable{
 		    		clusterOut.flush();
 	    		}
     		}
-			else if(cluster.isSpreadLeg){
-				synchronized(bin){
-					bin.legs.remove(cluster);
-				}
-			}
+    		else if(cluster.isSpreadLeg){
+    			processSpreadLeg(cluster, ticker);
+    		}
 		}catch(NullPointerException e){
 			e.printStackTrace();
 		}catch(Exception e){
 			e.printStackTrace();
-		}		
+		}
+	}
+	
+	private void processSpreadLeg(Cluster cluster, String ticker){
+		// if we have a spread leg, see if it's greater than the quantity threshold
+		// if so, then increment the number of processed legs, otherwise remove it from the bin
+		// afterwards, if the number of processed legs equals the size of the bin, delete the bin
+		// and send it out if the bin size is greater than 0
+		boolean isSpreadProcessed;
+		String spreadStr = "";
+		Bin bin = cluster.bin;
+		synchronized(bin){
+			if(cluster.quantity >= CLUSTER_QUANTITY_THRESHOLD){
+				bin.incrProcessed();
+    			System.out.println(String.format("SPREAD CLUSTER FOUND (%d/%d)\t%s\t%d\t%f\t%f\t%f\t%d", bin.numProcessed, bin.legs.size(),
+    					cluster.trades.get(0).getEventSymbol(), cluster.trades.get(0).getTime(), cluster.trades.get(0).getBidPrice(),
+    					cluster.trades.get(0).getAskPrice(), cluster.trades.get(0).getPrice(), cluster.quantity));
+			}
+			else
+				bin.legs.remove(cluster);
+			isSpreadProcessed = bin.isProcessed();
+			if(isSpreadProcessed){
+				spreadTracker.removeBin(bin, ticker);
+				spreadStr = bin.toString();
+			}
+		}
+		if(isSpreadProcessed && bin.legs.size() > 0){			
+			System.out.println("Spread PROCESSED: " + spreadStr);
+			KeyedMessage<String, String> message = new KeyedMessage<String, String>("clusters", ticker, spreadStr);
+			producer.send(message);		
+		}
 	}
 }

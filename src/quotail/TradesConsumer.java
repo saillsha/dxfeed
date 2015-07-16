@@ -21,7 +21,9 @@ public class TradesConsumer {
     private static String clusterFile = null;
     private static int numPartitions = 2;
     private static String zookeeperUrl = "localhost:2181";
-
+    public static boolean drainQueue = false;
+    public static boolean updateRedis = false;
+    
     public TradesConsumer(String a_groupId, String a_topic, String zookeeperUrl) {
         consumer = kafka.consumer.Consumer.createJavaConsumerConnector(
                 createConsumerConfig(zookeeperUrl, a_groupId));
@@ -72,13 +74,16 @@ public class TradesConsumer {
 		Option zookeeper = OptionBuilder.withArgName("zookeeper").hasArg()
 				.withDescription("host of zookeeper server").create("zookeeper");
 		options.addOption("drainqueue", false, "passively read in the kafka queue to quickly drain it");
+		options.addOption("update_redis", false, "update redis with aggregate volume numbers. Only one process should be doing this at a time");
 		options.addOption(clusterfile);
 		options.addOption(partitions);
 		options.addOption(zookeeper);
-		
+
 		CommandLineParser parser = new BasicParser();
 		try{
 			CommandLine cmd = parser.parse(options, args);
+			drainQueue = cmd.hasOption("drainqueue");
+			updateRedis = cmd.hasOption("update_redis");
 			if(cmd.hasOption("clusterfile"))
 				clusterFile = cmd.getOptionValue("clusterFile");
 			if(cmd.hasOption("partitions"))
