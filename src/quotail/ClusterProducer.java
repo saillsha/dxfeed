@@ -107,7 +107,7 @@ public class ClusterProducer implements Runnable {
 	    		    else{
 	    		    	Cluster cluster = clusterMap.get(symbol);
 	    		    	if(Math.abs(t.getTime() - cluster.trades.getFirst().getTime()) > CLUSTER_WAIT_TIME || cluster.isSpreadLeg != t.isSpreadLeg()){
-	    		    		// most recent cluster is outside the cluster interval, or we found a mismatch in spreads, so cancel timer and being processing right away
+	    		    		// most recent cluster is outside the cluster interval, or we found a mismatch in spreads, being processing right away
 	    		    		boolean wasProcessed = false;
 	    		    		synchronized(cluster){
 	    		    			// synchronize access to processing cluster so the cluster consumer thread does not attempt to do so at the same time
@@ -117,8 +117,10 @@ public class ClusterProducer implements Runnable {
 		    		    		else
 		    		    			wasProcessed = true;
 		    		    	}
-	    		    		if(!wasProcessed)
+	    		    		if(!wasProcessed){
+	    		    			clusterConsumer.processCluster(cluster);
 	    		    			createCluster(t, symbol, ticker);
+	    		    		}
 	    		    	}
 	    		    	else{
 	    		    		clusterMap.get(symbol).addTrade(t);
