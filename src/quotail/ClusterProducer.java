@@ -75,8 +75,10 @@ public class ClusterProducer implements Runnable {
     		    ObjectInputStream is = new ObjectInputStream(in);
     		    t = (TimeAndSale)is.readObject();
     		    // invalid trade if size 0, continue
-    		    if(t.getSize() == 0 || TradesConsumer.drainQueue) continue;
-//    		    System.out.println(t);
+    		    if(t.getSize() == 0 || TradesConsumer.drainQueue){
+    		    	System.out.println(t);
+    		    	continue;
+    		    }
     		    symbol = t.getEventSymbol();
        		    ticker = DXFeedUtils.getTicker(symbol);
 

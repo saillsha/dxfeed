@@ -163,7 +163,7 @@ public class ClusterConsumer implements Runnable{
 				spreadStr = bin.toString();
 			}
 		}
-		if(isSpreadProcessed && bin.legs.size() > 0){			
+		if(isSpreadProcessed && bin.legs.size() > 0){
 			System.out.println("Spread PROCESSED: " + spreadStr);
 			KeyedMessage<String, String> message = new KeyedMessage<String, String>("clusters", ticker, spreadStr);
 			producer.send(message);		

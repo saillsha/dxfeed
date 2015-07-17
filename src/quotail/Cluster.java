@@ -109,6 +109,8 @@ public class Cluster {
 		sb.append(",\"time\":");
 		TimeAndSale tns = this.trades.get(0);
 		sb.append(tns.getTime());
+		sb.append(",\"creationTime\":");
+		sb.append(this.creationTime);
 		sb.append(",\"bid\":");
 		sb.append(tns.getBidPrice());
 		sb.append(",\"ask\":");
