@@ -85,7 +85,7 @@ public class TradesConsumer {
 			drainQueue = cmd.hasOption("drainqueue");
 			updateRedis = cmd.hasOption("update_redis");
 			if(cmd.hasOption("clusterfile"))
-				clusterFile = cmd.getOptionValue("clusterFile");
+				clusterFile = cmd.getOptionValue("clusterfile");
 			if(cmd.hasOption("partitions"))
 				numPartitions = Integer.parseInt(cmd.getOptionValue("partitions"));
 			if(cmd.hasOption("zookeeper"))
