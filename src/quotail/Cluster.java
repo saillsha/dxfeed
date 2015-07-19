@@ -14,7 +14,7 @@ public class Cluster {
 	public int quantity = 0;
 	public boolean isSpreadLeg = false;
 	public long openinterest = -1;
-	public int volume = -1;
+	public long volume = -1;
 	public float money = 0;
 	public Side classification;
 	public Bin bin;
