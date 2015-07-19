@@ -126,9 +126,11 @@ public class ClusterConsumer implements Runnable{
 	    			producer.send(message);
 	    		}
 	    		if(clusterOut != null){
-	    			// write out cluster to file
-	    			clusterOut.println(cluster.toJSON());
-		    		clusterOut.flush();
+	    			synchronized(clusterOut){
+		    			// write out cluster to file
+		    			clusterOut.println(cluster.toJSON());
+		    			clusterOut.flush();
+	    			}
 	    		}
     		}
     		else if(cluster.isSpreadLeg){
@@ -167,7 +169,14 @@ public class ClusterConsumer implements Runnable{
 		if(isSpreadProcessed && bin.legs.size() > 0){
 			System.out.println("Spread PROCESSED: " + spreadStr);
 			KeyedMessage<String, String> message = new KeyedMessage<String, String>("clusters", ticker, spreadStr);
-			producer.send(message);		
+			producer.send(message);
+    		if(clusterOut != null){
+    			synchronized(clusterOut){
+	    			// write out cluster to file
+	    			clusterOut.println(spreadStr);
+	    			clusterOut.flush();
+    			}
+    		}
 		}
 	}
 }
