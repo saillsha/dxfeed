@@ -40,6 +40,7 @@ public class ClusterProducer implements Runnable {
     private HashMap<String, Cluster> clusterMap;
     private LinkedBlockingQueue<Cluster> clusterQueue;
     private Map<String, String> aggVolMap = new HashMap<String, String>();
+    private Map<String, Long> contractVolMap = new HashMap<String, Long>();
     private SpreadTracker spreadTracker = new SpreadTracker();
     private ClusterConsumer clusterConsumer;
     
@@ -81,7 +82,12 @@ public class ClusterProducer implements Runnable {
     		    }
     		    symbol = t.getEventSymbol();
        		    ticker = DXFeedUtils.getTicker(symbol);
+       		    long contractVol = 0;
 
+       		    if(contractVolMap.containsKey(symbol)){
+       		    	contractVol = contractVolMap.get(symbol);
+       		    }
+       		    contractVolMap.put(symbol, contractVol + t.getSize());
     		    // update redis with aggregate counts
        		    if(TradesConsumer.updateRedis){
 	    		    char optionType = t.getEventSymbol().substring(7).lastIndexOf('C') == -1 ? 'P' : 'C';
@@ -106,7 +112,7 @@ public class ClusterProducer implements Runnable {
 		    	synchronized(clusterMap){
     		    	if(!clusterMap.containsKey(symbol)){
     		    		// create new cluster for this trade if none exists yet for the contract
-    		    		createCluster(t, symbol, ticker);
+    		    		createCluster(t, symbol, ticker, contractVol);
 	    		    }
 	    		    else{
 	    		    	Cluster cluster = clusterMap.get(symbol);
@@ -123,7 +129,7 @@ public class ClusterProducer implements Runnable {
 		    		    	}
 	    		    		if(!wasProcessed){
 	    		    			clusterConsumer.processCluster(cluster);
-	    		    			createCluster(t, symbol, ticker);
+	    		    			createCluster(t, symbol, ticker, contractVol);
 	    		    		}
 	    		    	}
 	    		    	else{
@@ -152,8 +158,9 @@ public class ClusterProducer implements Runnable {
         System.out.println("Shutting down Thread: " + m_threadNumber);
     }
     
-    private void createCluster(TimeAndSale t, String symbol, String ticker) throws InterruptedException{
+    private void createCluster(TimeAndSale t, String symbol, String ticker, long contractVol) throws InterruptedException{
     	Cluster cluster = new Cluster(t);
+    	cluster.volume = contractVol;
     	if(t.isSpreadLeg()){
 	    	// spread tracking logic, add spread leg for this ticker
     		synchronized(spreadTracker){

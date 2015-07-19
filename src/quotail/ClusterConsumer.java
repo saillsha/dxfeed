@@ -112,10 +112,11 @@ public class ClusterConsumer implements Runnable{
 	    		if(summaryPromise.awaitWithoutException(SUMMARY_TIMEOUT, TimeUnit.MILLISECONDS)){
 		    		cluster.openinterest = summaryPromise.getResult().getOpenInterest();
 	    		}
-	    		Promise<Trade> tradePromise = feed.getLastEventPromise(Trade.class, denormalizedSymbol);
-	    		if(tradePromise.awaitWithoutException(SUMMARY_TIMEOUT, TimeUnit.MILLISECONDS)){
-	    			cluster.volume = (int)tradePromise.getResult().getDayVolume();
-	    		}
+//	    		Promise<Trade> tradePromise = feed.getLastEventPromise(Trade.class, denormalizedSymbol);
+//	    		if(tradePromise.awaitWithoutException(SUMMARY_TIMEOUT, TimeUnit.MILLISECONDS)){
+//	    			cluster.volume = (int)tradePromise.getResult().getDayVolume();
+//	    		}
+	    		cluster.volume += cluster.quantity;
     			System.out.println("CLUSTER FOUND (" + elapsedTime(cluster) + "ms) [" + cluster.toJSON() + "]");
 	    		if(cluster.isSpreadLeg){
 	    			processSpreadLeg(cluster, ticker);
