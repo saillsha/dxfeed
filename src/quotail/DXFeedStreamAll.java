@@ -37,6 +37,7 @@ public class DXFeedStreamAll{
 	public static boolean updateTradeTime = false;
 	static final String TOPIC_NAME = "timeandsales4";
 	static PrintWriter tradeOut = null;
+	static PrintWriter canceledOut = null;
 	public static void main(String[] args){
 		// config block for kafka producer
 		// http://kafka.apache.org/documentation.html#topic-configs
@@ -77,6 +78,7 @@ public class DXFeedStreamAll{
 		
 		CommandLineParser parser = new BasicParser();
 		try{
+			canceledOut = new PrintWriter(new BufferedWriter(new FileWriter("correction_trades.log", true)));
 			CommandLine cmd = parser.parse(options, args);
 
 			if(cmd.hasOption("outfile")){
@@ -187,6 +189,11 @@ public class DXFeedStreamAll{
 					event.setTime(System.currentTimeMillis());
 				}
 				String ticker = DXFeedUtils.getTicker(event.getEventSymbol());
+				if(event.isCancel() || event.isCorrection()){
+					// canceled or correction event type
+					canceledOut.println(event.toString());
+					continue;
+				}
 				// we have no interest in parsing trades that are not during normal market hours or are mini contracts
 				if(!(updateTradeTime || DXFeedUtils.isDuringMarketHours(event.getTime())) || DXFeedUtils.isMiniContract(ticker))
 					continue;
