@@ -61,7 +61,7 @@ public class DXFeedStreamAll{
 				.withDescription("the file path to which trades are written")
 				.create("outfile");
 		Option contracts = OptionBuilder.withArgName("contracts").hasArg()
-				.withDescription("command separated list of contracts to subscribe to when in time series mode")
+				.withDescription("comma separated list of contracts to subscribe to when in time series mode")
 				.create("contracts");
 		Option fromtime = OptionBuilder.withArgName("fromtime").hasArg()
 				.withDescription("UNIX timestamp from which to read timeseries options").create("fromtime");

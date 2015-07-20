@@ -25,6 +25,7 @@ public class ClusterConsumer implements Runnable{
 
     private SpreadTracker spreadTracker;
 	private Map<String, Cluster> clusterMap;
+	private Map<String, Integer> uniqueMap;
 	private LinkedBlockingQueue<Cluster> clusterQueue;
 	private final int CLUSTER_WAIT_TIME = 400;
     private final int CLUSTER_QUANTITY_THRESHOLD = 50;
@@ -39,7 +40,7 @@ public class ClusterConsumer implements Runnable{
     		configureKafkaProducer();
 		try{
         	if(clusterFile != null){
-        		clusterOut = new PrintWriter(new BufferedWriter(new FileWriter(clusterFile, true)));
+        		clusterOut = new PrintWriter(new BufferedWriter(new FileWriter(clusterFile)));
         	}
         }
         catch(IOException e){
@@ -124,13 +125,13 @@ public class ClusterConsumer implements Runnable{
 	    		else{
 	    			KeyedMessage<String, String> message = new KeyedMessage<String, String>("clusters", DXFeedUtils.getTicker(symbol), "[" + cluster.toJSON() + "]");
 	    			producer.send(message);
-	    		}
-	    		if(clusterOut != null){
-	    			synchronized(clusterOut){
-		    			// write out cluster to file
-		    			clusterOut.println(cluster.toJSON());
-		    			clusterOut.flush();
-	    			}
+		    		if(clusterOut != null){
+		    			synchronized(clusterOut){
+			    			// write out cluster to file
+			    			clusterOut.println(cluster.toJSON());
+			    			clusterOut.flush();
+		    			}
+		    		}
 	    		}
     		}
     		else if(cluster.isSpreadLeg){
