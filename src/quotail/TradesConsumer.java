@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.LinkedBlockingDeque;
 
 public class TradesConsumer {
     private final ConsumerConnector consumer;
@@ -44,7 +44,7 @@ public class TradesConsumer {
         int threadNumber = 0;
         for (final KafkaStream stream : streams) {
         	HashMap<String, Cluster> clusterMap = new HashMap<String, Cluster>();
-        	LinkedBlockingQueue<Cluster> clusterQueue = new LinkedBlockingQueue<Cluster>();
+        	LinkedBlockingDeque<Cluster> clusterQueue = new LinkedBlockingDeque<Cluster>();
         	SpreadTracker spreadTracker = new SpreadTracker();
         	ClusterConsumer clusterConsumer = new ClusterConsumer(clusterQueue, clusterMap, spreadTracker, clusterFile);
         	new Thread(new ClusterProducer(stream, threadNumber, clusterQueue, clusterMap, spreadTracker, clusterConsumer)).start();

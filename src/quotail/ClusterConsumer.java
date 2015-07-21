@@ -4,7 +4,7 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.Map;
 import java.util.Properties;
@@ -26,13 +26,14 @@ public class ClusterConsumer implements Runnable{
     private SpreadTracker spreadTracker;
 	private Map<String, Cluster> clusterMap;
 	private Map<String, Integer> uniqueMap;
-	private LinkedBlockingQueue<Cluster> clusterQueue;
+	private LinkedBlockingDeque<Cluster> clusterQueue;
 	private final int CLUSTER_WAIT_TIME = 400;
+	private final int CLUSTER_TIMEOUT = 2000;
     private final int CLUSTER_QUANTITY_THRESHOLD = 50;
     private final int CLUSTER_MONEY_THRESHOLD = 50000;
     private final long SUMMARY_TIMEOUT = 500;
 	
-    public ClusterConsumer(LinkedBlockingQueue<Cluster> clusterQueue, Map<String, Cluster> clusterMap, SpreadTracker spreadTracker, String clusterFile){
+    public ClusterConsumer(LinkedBlockingDeque<Cluster> clusterQueue, Map<String, Cluster> clusterMap, SpreadTracker spreadTracker, String clusterFile){
 		this.clusterQueue = clusterQueue;
 		this.clusterMap = clusterMap;
 		this.spreadTracker = spreadTracker;
@@ -52,15 +53,12 @@ public class ClusterConsumer implements Runnable{
 		Cluster nextCluster;
 		try{
 			while((nextCluster = clusterQueue.take()) != null){
-
-//				if(nextCluster.isSpreadLeg){
-//					System.out.println("elapsed time for " + nextCluster.trades.get(0).getEventSymbol() + "\t" + (System.currentTimeMillis() - nextCluster.creationTime));
-//				}
-				if(System.currentTimeMillis() - nextCluster.creationTime < CLUSTER_WAIT_TIME){
-					// reinsert the next cluster to the end of the queue if it hasn't "matured", or begin processing
-					clusterQueue.put(nextCluster);
-				}
-				else{
+				long lastClusterTime = clusterQueue.isEmpty() ? nextCluster.trades.getFirst().getTime() : clusterQueue.getLast().trades.getLast().getTime();
+				long nextClusterTime = nextCluster.trades.getFirst().getTime();
+				
+				// reinsert the next cluster to the end of the queue if it hasn't "matured", or begin processing
+				if(Math.abs(lastClusterTime - nextCluster.trades.getFirst().getTime()) > CLUSTER_WAIT_TIME ||
+						nextCluster.creationTime - System.currentTimeMillis() > CLUSTER_TIMEOUT){
 					// discard the cluster if it has already been processed
 					boolean wasProcessed = false;
 					synchronized(nextCluster){
@@ -72,6 +70,9 @@ public class ClusterConsumer implements Runnable{
 					}
 					if(!wasProcessed)
 						processCluster(nextCluster);
+				}
+				else {
+					clusterQueue.put(nextCluster);
 				}
 			}
 		}catch(InterruptedException e){
@@ -106,6 +107,11 @@ public class ClusterConsumer implements Runnable{
 				clusterMap.remove(symbol);
     		}
 
+//			if(cluster.quantity < CLUSTER_QUANTITY_THRESHOLD && ticker.equals("WETF")){
+//				System.out.println("non-spread trade: " + cluster.toJSON());
+//				System.out.println(cluster.quantity + " " + CLUSTER_QUANTITY_THRESHOLD);
+//				System.out.println(cluster.quantity < CLUSTER_QUANTITY_THRESHOLD);
+//    		}
     		if(cluster.quantity >= CLUSTER_QUANTITY_THRESHOLD){
 				cluster.classifyCluster();
 				String denormalizedSymbol = DXFeedUtils.denormalizeContract(symbol);
