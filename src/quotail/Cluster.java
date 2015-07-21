@@ -119,7 +119,8 @@ public class Cluster {
 		sb.append(tns.getAskPrice());
 		sb.append(",\"price\":");
 		sb.append(tns.getPrice());
-		
+		sb.append(",\"isSpread\":");
+		sb.append(tns.isSpreadLeg());
 		if(this.trades.size() > 1){
 			sb.append(",\"trades\":[");
 			for(TimeAndSale t : this.trades){
@@ -135,8 +136,6 @@ public class Cluster {
 				sb.append(t.getAggressorSide() == Side.BUY ? "\"B\"" : (t.getAggressorSide() == Side.SELL ? "\"S\"" : "\"U\""));
 				sb.append(",\"exchange\":");
 				sb.append("\"" + t.getExchangeCode() + "\"");
-				sb.append(",\"isSpread\":");
-				sb.append(t.isSpreadLeg());
 				sb.append(",\"size\":");
 				sb.append(t.getSize());
 				sb.append(",\"sequence\":");
