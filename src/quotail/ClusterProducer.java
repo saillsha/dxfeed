@@ -1,7 +1,7 @@
 package quotail;
 
 import java.util.HashMap;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.Map;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
@@ -38,13 +38,13 @@ public class ClusterProducer implements Runnable {
 	private KafkaStream m_stream;
     private int m_threadNumber;
     private HashMap<String, Cluster> clusterMap;
-    private LinkedBlockingQueue<Cluster> clusterQueue;
+    private LinkedBlockingDeque<Cluster> clusterQueue;
     private Map<String, String> aggVolMap = new HashMap<String, String>();
     private Map<String, Long> contractVolMap = new HashMap<String, Long>();
     private SpreadTracker spreadTracker = new SpreadTracker();
     private ClusterConsumer clusterConsumer;
     
-    public ClusterProducer(KafkaStream a_stream, int a_threadNumber, LinkedBlockingQueue<Cluster> clusterQueue,
+    public ClusterProducer(KafkaStream a_stream, int a_threadNumber, LinkedBlockingDeque<Cluster> clusterQueue,
     		HashMap<String, Cluster> clusterMap, SpreadTracker spreadTracker, ClusterConsumer clusterConsumer) {
         m_threadNumber = a_threadNumber;
         m_stream = a_stream;
@@ -109,6 +109,9 @@ public class ClusterProducer implements Runnable {
 	    		    }
        		    }
 
+       		    if(t.isSpreadLeg()){
+       		    	symbol += ":spread";
+       		    }
 		    	synchronized(clusterMap){
     		    	if(!clusterMap.containsKey(symbol)){
     		    		// create new cluster for this trade if none exists yet for the contract
@@ -116,7 +119,7 @@ public class ClusterProducer implements Runnable {
 	    		    }
 	    		    else{
 	    		    	Cluster cluster = clusterMap.get(symbol);
-	    		    	if(Math.abs(t.getTime() - cluster.trades.getFirst().getTime()) > CLUSTER_WAIT_TIME || cluster.isSpreadLeg != t.isSpreadLeg()){
+	    		    	if(Math.abs(t.getTime() - cluster.trades.getFirst().getTime()) > CLUSTER_WAIT_TIME){
 	    		    		// most recent cluster is outside the cluster interval, or we found a mismatch in spreads, being processing right away
 	    		    		boolean wasProcessed = false;
 	    		    		synchronized(cluster){
@@ -162,7 +165,7 @@ public class ClusterProducer implements Runnable {
     	Cluster cluster = new Cluster(t);
     	cluster.volume = contractVol;
     	if(t.isSpreadLeg()){
-	    	// spread tracking logic, add spread leg for this ticker
+    		// spread tracking logic, add spread leg for this ticker
     		synchronized(spreadTracker){
     			if(t.getSize() > CLUSTER_QUANTITY_THRESHOLD){
 					System.out.println(String.format("NEW SPREAD TRADE FOUND\t%s\t%d\t%f\t%f\t%f\t%d", t.getEventSymbol(), t.getTime(), t.getBidPrice(), t.getAskPrice(), t.getPrice(), t.getSize()));
