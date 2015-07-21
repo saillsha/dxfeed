@@ -57,8 +57,8 @@ public class ClusterConsumer implements Runnable{
 				long nextClusterTime = nextCluster.trades.getFirst().getTime();
 				
 				// reinsert the next cluster to the end of the queue if it hasn't "matured", or begin processing
-				if(Math.abs(lastClusterTime - nextCluster.trades.getFirst().getTime()) > CLUSTER_WAIT_TIME ||
-						nextCluster.creationTime - System.currentTimeMillis() > CLUSTER_TIMEOUT){
+				if(lastClusterTime - nextCluster.trades.getFirst().getTime() > CLUSTER_WAIT_TIME ||
+						System.currentTimeMillis() - nextCluster.creationTime > CLUSTER_TIMEOUT){
 					// discard the cluster if it has already been processed
 					boolean wasProcessed = false;
 					synchronized(nextCluster){
@@ -107,11 +107,6 @@ public class ClusterConsumer implements Runnable{
 				clusterMap.remove(symbol);
     		}
 
-//			if(cluster.quantity < CLUSTER_QUANTITY_THRESHOLD && ticker.equals("WETF")){
-//				System.out.println("non-spread trade: " + cluster.toJSON());
-//				System.out.println(cluster.quantity + " " + CLUSTER_QUANTITY_THRESHOLD);
-//				System.out.println(cluster.quantity < CLUSTER_QUANTITY_THRESHOLD);
-//    		}
     		if(cluster.quantity >= CLUSTER_QUANTITY_THRESHOLD){
 				cluster.classifyCluster();
 				String denormalizedSymbol = DXFeedUtils.denormalizeContract(symbol);
@@ -134,7 +129,7 @@ public class ClusterConsumer implements Runnable{
 		    		if(clusterOut != null){
 		    			synchronized(clusterOut){
 			    			// write out cluster to file
-			    			clusterOut.println(cluster.toJSON());
+			    			clusterOut.println("[" + cluster.toJSON() + "]");
 			    			clusterOut.flush();
 		    			}
 		    		}

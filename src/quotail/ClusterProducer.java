@@ -174,6 +174,7 @@ public class ClusterProducer implements Runnable {
     			cluster.bin = bin;
     		}
     	}
+//    	System.out.println("adding new cluster for trade: " + t);
     	clusterMap.put(symbol, cluster);
     	clusterQueue.put(cluster);
     }

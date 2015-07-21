@@ -94,7 +94,7 @@ public class TradesConsumer {
 			System.out.println("error parsing arguments");
 			e.printStackTrace();
 			HelpFormatter formatter = new HelpFormatter();
-			formatter.printHelp("<-clusterfile FILENAME> <-partitions NUMBER> <-zookeeper URL> <--drainqueue>", options);
+			formatter.printHelp("<-clusterfile FILENAME> <-partitions NUMBER> <-zookeeper URL> <--update_redis> <--drainqueue>", options);
 			System.exit(1);
 		}
 	}
