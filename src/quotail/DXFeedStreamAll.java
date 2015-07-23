@@ -189,6 +189,14 @@ public class DXFeedStreamAll{
 					event.setTime(System.currentTimeMillis());
 				}
 				String ticker = DXFeedUtils.getTicker(event.getEventSymbol());
+				if(tradeOut != null){
+		    		tradeOut.println(DXFeedUtils.serializeTrade(event));
+		    		//flush out trades and canceled file every so often
+		    		if(counter % 200 == 0){
+		    			tradeOut.flush();
+		    			canceledOut.flush();
+		    		}
+				}
 				if(event.isCancel() || event.isCorrection()){
 					// canceled or correction event type
 					canceledOut.println(event.toString());
@@ -206,9 +214,6 @@ public class DXFeedStreamAll{
 					e.printStackTrace();
 				}
 				System.out.println(++counter + "\t" + event);
-				if(tradeOut != null){
-		    		tradeOut.println(DXFeedUtils.serializeTrade(event));
-				}
 				trades.add(new KeyedMessage<byte[], byte[]>(TOPIC_NAME, ticker.getBytes(), b.toByteArray()));
 			}
 			producer.send(trades);

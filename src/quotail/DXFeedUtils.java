@@ -3,6 +3,7 @@ import java.util.Date;
 
 import com.dxfeed.event.market.Side;
 import com.dxfeed.event.market.TimeAndSale;
+import com.dxfeed.event.market.TimeAndSaleType;
 
 public class DXFeedUtils {
 	final static int NUM_FIELDS = 10;
@@ -19,7 +20,7 @@ public class DXFeedUtils {
     	return t.getEventSymbol() + DELIM + t.getTime() + DELIM + t.getSequence() + DELIM +
     			t.getExchangeCode() + DELIM + t.getSize() + DELIM + t.getPrice() + DELIM + 
     			t.getBidPrice() + DELIM + t.getAskPrice() + DELIM +
-    			(t.getAggressorSide() == Side.BUY ? "BUY" : "SELL") + DELIM + t.isSpreadLeg();
+    			(t.getAggressorSide() == Side.BUY ? "BUY" : "SELL") + DELIM + t.isSpreadLeg() + DELIM + t.getType();
     }
     
     public static TimeAndSale parseTrade(String line){
@@ -37,6 +38,13 @@ public class DXFeedUtils {
     	t.setAskPrice(Double.parseDouble(fields[7]));
     	t.setAggressorSide(fields[8].equals("BUY") ? Side.BUY : Side.SELL);
     	t.setSpreadLeg(fields[9].equals("true"));
+    	t.setType(TimeAndSaleType.NEW);
+    	if(fields.length == 10){
+    		if(fields[9].equals("CANCEL"))
+    			t.setType(TimeAndSaleType.CANCEL);
+    		else if(fields[9].equals("CORRECTION"))
+    			t.setType(TimeAndSaleType.CORRECTION);
+    	}
     	return t;
     }
     

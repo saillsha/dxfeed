@@ -91,7 +91,6 @@ public class DXFeedConnect {
 		DXFeedTimeSeriesSubscription<TimeSeriesEvent<?>> sub = DXFeed.getInstance().createTimeSeriesSubscription(eventType);
 		sub.addEventListener(new PrintListener<TimeSeriesEvent<?>>());
 		sub.setFromTime(from);
-		System.out.println("WILDCARD: " + WildcardSymbol.ALL.toString());
 		sub.addSymbols(symbols);
 	}
 
