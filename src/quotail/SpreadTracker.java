@@ -8,7 +8,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 // a spread will only be pushed out to kafka when all of its legs have been processed
 public class SpreadTracker {
 	HashMap<String, LinkedBlockingQueue<Bin>> spreads = new HashMap<String, LinkedBlockingQueue<Bin>>();
-	final int SPREAD_TIME_THRESHOLD = 5;
+	final int SPREAD_TIME_THRESHOLD = 10;
 	public Bin findBin(Cluster cluster, String ticker){
 		LinkedBlockingQueue<Bin> bins = spreads.get(ticker);
 		for(Bin bin: bins){
@@ -23,12 +23,14 @@ public class SpreadTracker {
 		String ticker = DXFeedUtils.getTicker(cluster.trades.get(0).getEventSymbol());
 		Bin retval;
 		if(!spreads.containsKey(ticker)){
+			// if no spread exists for this ticker, create new bin and new queue of bins for this ticker
 			retval = new Bin(cluster);
 			LinkedBlockingQueue<Bin> bins = new LinkedBlockingQueue<Bin>();
 			bins.offer(retval);
 			spreads.put(ticker, bins);
 		}
 		else{
+			// if bins exist for ticker, try to match with the one that corresponds to the same interval. if none exists, create new bin and add to queue
 			LinkedBlockingQueue<Bin> bins = spreads.get(ticker);
 			retval = findBin(cluster, ticker);
 			if(retval == null){

@@ -68,8 +68,9 @@ public class ClusterConsumer implements Runnable{
 						else
 							wasProcessed = true;
 					}
-					if(!wasProcessed)
+					if(!wasProcessed){
 						processCluster(nextCluster);
+					}
 				}
 				else {
 					clusterQueue.put(nextCluster);
@@ -102,6 +103,9 @@ public class ClusterConsumer implements Runnable{
 		cluster.isProcessed = true;
 		String symbol = cluster.trades.getFirst().getEventSymbol();
 		String ticker = DXFeedUtils.getTicker(symbol);
+		if(cluster.isSpreadLeg){
+			symbol += ":spread";
+		}
 		try{
     		synchronized(clusterMap){
 				clusterMap.remove(symbol);

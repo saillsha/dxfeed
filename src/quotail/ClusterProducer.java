@@ -167,7 +167,7 @@ public class ClusterProducer implements Runnable {
     	if(t.isSpreadLeg()){
     		// spread tracking logic, add spread leg for this ticker
     		synchronized(spreadTracker){
-    			if(t.getSize() > CLUSTER_QUANTITY_THRESHOLD){
+    			if(t.getSize() >= CLUSTER_QUANTITY_THRESHOLD){
 					System.out.println(String.format("NEW SPREAD TRADE FOUND\t%s\t%d\t%f\t%f\t%f\t%d", t.getEventSymbol(), t.getTime(), t.getBidPrice(), t.getAskPrice(), t.getPrice(), t.getSize()));
 				}
     			Bin bin = spreadTracker.addCluster(cluster);
