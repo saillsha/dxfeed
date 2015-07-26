@@ -177,6 +177,9 @@ public class DXFeedStreamAll{
 		DXFeedSubscription<TimeAndSale> sub = feed.createSubscription(TimeAndSale.class);
 		sub.addEventListener(new TradeListener());
 		sub.addSymbols(WildcardSymbol.ALL);
+		while(true){
+			// persist on the command line
+		}
 	}
 	
 	public class TradeListener implements DXFeedEventListener<TimeAndSale>{
