@@ -2,9 +2,11 @@ package quotail;
 
 import java.util.HashMap;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.Date;
 import java.util.Map;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
+import java.text.SimpleDateFormat;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -64,6 +66,8 @@ public class ClusterProducer implements Runnable {
     	Jedis jedis = TradesConsumer.updateRedis ? jedisPool.getResource() : null;
     	ConsumerIterator<byte[], byte[]> it = m_stream.iterator();
 	    TimeAndSale t = null;
+	    // date format object for generating redis keys
+	    SimpleDateFormat df = new SimpleDateFormat("yyyyMMdd");
 	    // contract and ticker symbols
 	    String symbol, ticker;
 
@@ -90,9 +94,10 @@ public class ClusterProducer implements Runnable {
        		    contractVolMap.put(symbol, contractVol + t.getSize());
     		    // update redis with aggregate counts
        		    if(TradesConsumer.updateRedis){
+       		    	Date d = new Date(t.getTime());
 	    		    char optionType = t.getEventSymbol().substring(7).lastIndexOf('C') == -1 ? 'P' : 'C';
 			    	String hashKey = optionType + (t.getAggressorSide() == Side.BUY ? "A" : (t.getAggressorSide() == Side.SELL ? "B" : "M"));
-			    	String redisKey = ticker + "_agg_vol";
+			    	String redisKey =  df.format(d) + "_" + ticker + "_agg_vol";
 			    	Map<String, String> updatedVol = new HashMap<String, String>();
 			    	if(jedis.exists(redisKey)){
 			    		String agg_vol = jedis.hmget(redisKey, hashKey).get(0);
