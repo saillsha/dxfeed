@@ -45,6 +45,9 @@ public class ClusterProducer implements Runnable {
     private Map<String, Long> contractVolMap = new HashMap<String, Long>();
     private SpreadTracker spreadTracker = new SpreadTracker();
     private ClusterConsumer clusterConsumer;
+    // date format object for generating redis keys
+    private SimpleDateFormat df = new SimpleDateFormat("yyyyMMdd");
+	private Jedis jedis;
     
     public ClusterProducer(KafkaStream a_stream, int a_threadNumber, LinkedBlockingDeque<Cluster> clusterQueue,
     		HashMap<String, Cluster> clusterMap, SpreadTracker spreadTracker, ClusterConsumer clusterConsumer) {
@@ -54,65 +57,67 @@ public class ClusterProducer implements Runnable {
         this.clusterQueue = clusterQueue;
         this.spreadTracker = spreadTracker;
         this.clusterConsumer = clusterConsumer;
-    	aggVolMap.put("CA", "0");
+        this.jedis = TradesConsumer.updateRedis ? jedisPool.getResource() : null;
+        aggVolMap.put("CA", "0");
     	aggVolMap.put("CB", "0");
     	aggVolMap.put("CM", "0");
     	aggVolMap.put("PA", "0");
     	aggVolMap.put("PB", "0");
     	aggVolMap.put("PM", "0");
     }
+    
+    private void updateRedisAggVol(TimeAndSale t, String ticker){
+	    Date d = new Date(t.getTime());
+	    char optionType = t.getEventSymbol().substring(7).lastIndexOf('C') == -1 ? 'P' : 'C';
+    	String hashKey = optionType + (t.getAggressorSide() == Side.BUY ? "A" : (t.getAggressorSide() == Side.SELL ? "B" : "M"));
+    	String redisKey =  df.format(d) + "_" + ticker + "_agg_vol";
+    	Map<String, String> updatedVol = new HashMap<String, String>();
+    	if(jedis.exists(redisKey)){
+    		String agg_vol = jedis.hmget(redisKey, hashKey).get(0);
+    		agg_vol = agg_vol == null ? "0" : agg_vol;
+	    	int aggVol = Integer.parseInt(agg_vol) + (int)t.getSize();
+	    	updatedVol.put(hashKey, "" + aggVol);
+	    	jedis.hmset(redisKey, updatedVol);
+    	}
+	    else{
+	    	updatedVol.putAll(aggVolMap);
+	    	updatedVol.put(hashKey, "" + t.getSize());
+	    	jedis.hmset(redisKey, updatedVol);
+	    	jedis.expireAt(redisKey, REDIS_KEY_EXPIRY_TIME);
+	    }
+    }
+    
     public void run() {
     	System.out.println("starting thread..." + m_threadNumber);
-    	Jedis jedis = TradesConsumer.updateRedis ? jedisPool.getResource() : null;
     	ConsumerIterator<byte[], byte[]> it = m_stream.iterator();
 	    TimeAndSale t = null;
-	    // date format object for generating redis keys
-	    SimpleDateFormat df = new SimpleDateFormat("yyyyMMdd");
 	    // contract and ticker symbols
 	    String symbol, ticker;
-
 	    try{
 	    	while (it.hasNext()){
+    	    	// convert byte[] to TimeAndSale object
 	        	byte[] serializedTrade = it.next().message();
 	         	ByteArrayInputStream in = new ByteArrayInputStream(serializedTrade);
-
-    	    	// convert byte[] to TimeAndSale object
     		    ObjectInputStream is = new ObjectInputStream(in);
     		    t = (TimeAndSale)is.readObject();
-    		    // invalid trade if size 0, continue
+
+    		    symbol = t.getEventSymbol();
+    		    ticker = DXFeedUtils.getTicker(symbol);
+    		    long contractVol = 0;
+    		    // update redis with aggregate counts
+    		    if(TradesConsumer.updateRedis){
+    		    	updateRedisAggVol(t, ticker);
+    		    }
+    		    // continue if invalid trade of size 0 or drainqueue flag is on
     		    if(t.getSize() == 0 || TradesConsumer.drainQueue){
     		    	System.out.println(t);
     		    	continue;
     		    }
-    		    symbol = t.getEventSymbol();
-       		    ticker = DXFeedUtils.getTicker(symbol);
-       		    long contractVol = 0;
 
        		    if(contractVolMap.containsKey(symbol)){
        		    	contractVol = contractVolMap.get(symbol);
        		    }
        		    contractVolMap.put(symbol, contractVol + t.getSize());
-    		    // update redis with aggregate counts
-       		    if(TradesConsumer.updateRedis){
-       		    	Date d = new Date(t.getTime());
-	    		    char optionType = t.getEventSymbol().substring(7).lastIndexOf('C') == -1 ? 'P' : 'C';
-			    	String hashKey = optionType + (t.getAggressorSide() == Side.BUY ? "A" : (t.getAggressorSide() == Side.SELL ? "B" : "M"));
-			    	String redisKey =  df.format(d) + "_" + ticker + "_agg_vol";
-			    	Map<String, String> updatedVol = new HashMap<String, String>();
-			    	if(jedis.exists(redisKey)){
-			    		String agg_vol = jedis.hmget(redisKey, hashKey).get(0);
-			    		agg_vol = agg_vol == null ? "0" : agg_vol;
-	    		    	int aggVol = Integer.parseInt(agg_vol) + (int)t.getSize();
-	    		    	updatedVol.put(hashKey, "" + aggVol);
-	    		    	jedis.hmset(redisKey, updatedVol);
-			    	}
-	    		    else{
-	    		    	updatedVol.putAll(aggVolMap);
-	    		    	updatedVol.put(hashKey, "" + t.getSize());
-	    		    	jedis.hmset(redisKey, updatedVol);
-	    		    	jedis.expireAt(redisKey, REDIS_KEY_EXPIRY_TIME);
-	    		    }
-       		    }
 
        		    if(t.isSpreadLeg()){
        		    	symbol += ":spread";
