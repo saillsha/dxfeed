@@ -6,7 +6,7 @@ import com.dxfeed.event.market.TimeAndSale;
 import com.dxfeed.event.market.TimeAndSaleType;
 
 public class DXFeedUtils {
-	final static int NUM_FIELDS = 11;
+	final static int NUM_FIELDS = 10;
 	final static char DELIM = '\t';
 	static final int START_MIN = 9*60 + 30;
 	static final int END_MIN = 16*60 + 15;

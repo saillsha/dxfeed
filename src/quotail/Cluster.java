@@ -119,6 +119,8 @@ public class Cluster {
 		sb.append(tns.getAskPrice());
 		sb.append(",\"price\":");
 		sb.append(tns.getPrice());
+		sb.append(",\"type\":");
+		sb.append('"' + tns.getType().toString() + '"');
 		sb.append(",\"isSpread\":");
 		sb.append(tns.isSpreadLeg());
 		if(this.trades.size() > 1){
