@@ -78,8 +78,8 @@ public class DXFeedSummary {
 				String line = reader.readLine();
 				int  i = 0;
 
-				while( (line = reader.readLine()) != null && i < 5000){
-					if(i % 100 == 0){
+				while( (line = reader.readLine()) != null){
+					if(i % 10000 == 0){
 						processPromises(promises);
 					}
 					String[] columns = line.split(",");
