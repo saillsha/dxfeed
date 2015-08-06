@@ -203,7 +203,6 @@ public class DXFeedStreamAll{
 				if(event.isCancel() || event.isCorrection()){
 					// canceled or correction event type
 					canceledOut.println(event.toString());
-					continue;
 				}
 				// we have no interest in parsing trades that are not during normal market hours or are mini contracts
 				if(!(updateTradeTime || DXFeedUtils.isDuringMarketHours(event.getTime())) || DXFeedUtils.isMiniContract(ticker))

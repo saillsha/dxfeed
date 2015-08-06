@@ -27,7 +27,7 @@ public class DXFeedUtils {
     public static TimeAndSale parseTrade(String line){
     	if(line == null) return null;
     	String[] fields = line.split(""+DELIM);
-    	if(fields.length != NUM_FIELDS) return null;
+    	if(fields.length < NUM_FIELDS) return null;
 
     	TimeAndSale t = new TimeAndSale(fields[0]);
     	t.setTime(Long.parseLong(fields[1]));
@@ -40,10 +40,10 @@ public class DXFeedUtils {
     	t.setAggressorSide(fields[8].equals("BUY") ? Side.BUY : (fields[9].equals("SELL") ? Side.SELL : Side.UNDEFINED));
     	t.setSpreadLeg(fields[9].equals("true"));
     	t.setType(TimeAndSaleType.NEW);
-    	if(fields.length == 10){
-    		if(fields[9].equals("CANCEL"))
+    	if(fields.length == 11){
+    		if(fields[10].equals("CANCEL"))
     			t.setType(TimeAndSaleType.CANCEL);
-    		else if(fields[9].equals("CORRECTION"))
+    		else if(fields[10].equals("CORRECTION"))
     			t.setType(TimeAndSaleType.CORRECTION);
     	}
     	return t;
@@ -51,6 +51,9 @@ public class DXFeedUtils {
     
     // expects a normalized contract symbol of the form VXX150626C00019000, returns VXX
     public static String getTicker(String contract){
+    	if(contract.charAt(0) == '.'){
+    		contract = normalizeContract(contract);
+    	}
     	return contract.substring(0, contract.length() - 15);
     }
 
