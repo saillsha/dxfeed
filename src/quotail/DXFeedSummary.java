@@ -8,18 +8,12 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
-
-import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPoolConfig;
 
 import org.apache.commons.cli.*;
 
-import com.devexperts.util.DayUtil;
 import com.dxfeed.event.market.Summary;
 import com.dxfeed.promise.Promise;
 import com.dxfeed.promise.Promises;
@@ -31,33 +25,8 @@ public class DXFeedSummary {
 	static final int SYMBOL_COLUMN = 1;
 	static final int MULTIPLIER_COLUMN = 7;
 	static final int TICKER_COLUMN = 8;
-	static HashMap<String, ArrayList<Summary>> contractsMap = new HashMap<String, ArrayList<Summary>>();
-	private static JedisPool jedisPool = new JedisPool(new JedisPoolConfig(), "localhost");
-
-	
-	public static void processPromises(List<Promise<?>> promises){
-		if (!Promises.allOf(promises).awaitWithoutException(10, TimeUnit.SECONDS)){
-			System.out.println("operation timed out");
-		}
-		else{
-			for(int i = 0; i < promises.size(); ++i){
-				// put the results in their respective ticker bins
-				Summary s = (Summary)promises.get(i).getResult();
-				String ticker = DXFeedUtils.getTicker(s.getEventSymbol());
-				try{
-					contractsMap.get(ticker).add(s);
-				}
-				catch(NullPointerException e){
-					System.out.println("error");
-				}
-			}
-			// write this out to redis as hash
-		}
-		promises.clear();
-	}
 	
 	public static void main(String[] args){
-		Jedis jedis = jedisPool.getResource();
 		Options options = new Options();
 		Option filename = OptionBuilder.withArgName("file").hasArg()
 				.withDescription("the instrument profile file path from which to read trades")
@@ -76,44 +45,34 @@ public class DXFeedSummary {
 
 				// discard first line with column headers
 				String line = reader.readLine();
-				int  i = 0;
-
-				while( (line = reader.readLine()) != null){
-					if(i % 10000 == 0){
-						processPromises(promises);
-					}
-					String[] columns = line.split(",");
-					if(!columns[MULTIPLIER_COLUMN].equals("100")) continue; // we're only interested in non-mini options
-					System.out.println(i + " " + columns[SYMBOL_COLUMN]);
-					String root_symbol = DXFeedUtils.getTicker(columns[SYMBOL_COLUMN]);
-					if(!contractsMap.containsKey(root_symbol)) {
-						contractsMap.put(root_symbol, new ArrayList<Summary>());
-					}
-					promises.add(feed.getLastEventPromise(Summary.class, columns[SYMBOL_COLUMN]));
-					++i;
-				}
-				// process last set of promises
-				processPromises(promises);
-				for(String ticker : contractsMap.keySet()){
-					Map<String, String> oiMap = new HashMap<String, String>();
-					int date = 0;
-					for(Summary summary : contractsMap.get(ticker)){
-						date = DayUtil.getYearMonthDayByDayId(summary.getDayId());
-						String day = "" + date;
-						day = day.substring(0, 4) + "-" + day.substring(4, 6) + "-" + day.substring(6);
-						String symbol = DXFeedUtils.normalizeContract(summary.getEventSymbol());
-						String json = String.format("{\"date\": \"%s\", \"symbol\": \"%s\", \"openinterest\": \"%d\"}",
-								day, symbol, summary.getOpenInterest());
-						oiMap.put(symbol, json);
-					}
-
-					System.out.println(ticker);
-					jedis.hmset("" + date + "_" + ticker + "_chains", oiMap);
-				}
-				
+				HashSet<String> tickers = new HashSet<String>();
+				int  i =0;
+				promises.add(feed.getLastEventPromise(Summary.class, ".VER1160115C17.5"));
+//				while( (line = reader.readLine()) != null/* && i < 10000*/){
+//					String[] columns = line.split(",");
+//					tickers.add(columns[TICKER_COLUMN]);
+//					if(columns[MULTIPLIER_COLUMN].equals("100")) // we're only interested in non-mini options
+//						promises.add(feed.getLastEventPromise(Summary.class, columns[SYMBOL_COLUMN]));
+//					if(columns[MULTIPLIER_COLUMN].equals("10")){
+//						System.out.println(columns[SYMBOL_COLUMN]);
+//						++i;
+//					}
+//				}
+////				System.out.println("number of promises: " + promises.size());
+//				System.out.println("number of symbols: " + tickers.size());
 //        		PrintWriter outfile = new PrintWriter(new BufferedWriter(new FileWriter("/Users/sahil/Documents/workspace/dxfeed/sample_files/tickers.txt", true)));
+//				for(String ticker: tickers){
+//					outfile.println(ticker);
+//				}
 //				outfile.close();
-
+				if (!Promises.allOf(promises).awaitWithoutException(1, TimeUnit.SECONDS)){
+					System.out.println("operation timed out");
+				}
+				else{
+					for(i = 0; i < promises.size(); ++i){
+						System.out.println(i + " " + promises.get(i).getResult());
+					}
+				}
 			}
 			else{
 				System.out.println("instrument profile path must be specified with -f option");
