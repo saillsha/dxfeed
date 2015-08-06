@@ -97,10 +97,6 @@ public class DXFeedSummary {
 				for(String ticker : contractsMap.keySet()){
 					Map<String, String> oiMap = new HashMap<String, String>();
 					int date = 0;
-					if(ticker.equals("AAPL7")){
-						ArrayList<Summary> s = contractsMap.get(ticker);
-						System.out.println("whoa nelly");
-					}
 					for(Summary summary : contractsMap.get(ticker)){
 						date = DayUtil.getYearMonthDayByDayId(summary.getDayId());
 						String day = "" + date;
