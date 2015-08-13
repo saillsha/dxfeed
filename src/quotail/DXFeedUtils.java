@@ -21,13 +21,13 @@ public class DXFeedUtils {
     			t.getExchangeCode() + DELIM + t.getSize() + DELIM + t.getPrice() + DELIM + 
     			t.getBidPrice() + DELIM + t.getAskPrice() + DELIM +
     			(t.getAggressorSide() == Side.BUY ? "BUY" : (t.getAggressorSide() == Side.SELL ? "SELL" : "MID")) + DELIM +
-    			t.isSpreadLeg() + DELIM + t.getType();
+    			t.isSpreadLeg() + DELIM + t.getType() + DELIM + t.getExchangeSaleConditions();
     }
     
     public static TimeAndSale parseTrade(String line){
     	if(line == null) return null;
     	String[] fields = line.split(""+DELIM);
-    	if(fields.length < NUM_FIELDS) return null;
+    	if(fields.length == 0) return null;
 
     	TimeAndSale t = new TimeAndSale(fields[0]);
     	t.setTime(Long.parseLong(fields[1]));
@@ -45,6 +45,9 @@ public class DXFeedUtils {
     			t.setType(TimeAndSaleType.CANCEL);
     		else if(fields[10].equals("CORRECTION"))
     			t.setType(TimeAndSaleType.CORRECTION);
+    	}
+    	if(fields.length == 12){
+    		t.setExchangeSaleConditions(fields[11]);
     	}
     	return t;
     }

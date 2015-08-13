@@ -142,6 +142,8 @@ public class Cluster {
 				sb.append(t.getSize());
 				sb.append(",\"sequence\":");
 				sb.append(t.getSequence());
+				sb.append(",\"conditions\":");
+				sb.append(t.getExchangeSaleConditions());
 				sb.append("},");
 			}
 			// remove trailing comma
