@@ -123,6 +123,8 @@ public class Cluster {
 		sb.append('"' + tns.getType().toString() + '"');
 		sb.append(",\"isSpread\":");
 		sb.append(tns.isSpreadLeg());
+		sb.append(",\"conditions\":");
+		sb.append('"' + tns.getExchangeSaleConditions() + '"');
 		if(this.trades.size() > 1){
 			sb.append(",\"trades\":[");
 			for(TimeAndSale t : this.trades){
@@ -142,8 +144,6 @@ public class Cluster {
 				sb.append(t.getSize());
 				sb.append(",\"sequence\":");
 				sb.append(t.getSequence());
-				sb.append(",\"conditions\":");
-				sb.append(t.getExchangeSaleConditions());
 				sb.append("},");
 			}
 			// remove trailing comma
