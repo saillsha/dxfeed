@@ -27,33 +27,50 @@ import com.dxfeed.api.DXFeed;
 import com.dxfeed.api.DXFeedSubscription;
 
 public class LoadOpenInterest {
-	static final int INITIAL_CAPACITY = 800500;
+	static final int BATCH_SIZE = 1000;
 	static final int SYMBOL_COLUMN = 1;
 	static final int MULTIPLIER_COLUMN = 7;
 	static final int TICKER_COLUMN = 8;
 	static HashMap<String, ArrayList<Summary>> contractsMap = new HashMap<String, ArrayList<Summary>>();
 	private static JedisPool jedisPool = new JedisPool(new JedisPoolConfig(), "localhost");
-
+	private static DXFeed feed = DXFeed.getInstance();
 	
-	public static void processPromises(List<Promise<?>> promises){
-		if (!Promises.allOf(promises).awaitWithoutException(20, TimeUnit.SECONDS)){
-			System.out.println("operation timed out");
+	public static void processPromises(List<String> symbols){
+		List<Promise<?>> promises = new ArrayList<Promise<?>>(symbols.size());
+		for(String s : symbols){
+			promises.add(feed.getLastEventPromise(Summary.class, s));
+		}
+		if (!Promises.allOf(promises).awaitWithoutException(5, TimeUnit.SECONDS)){
+			System.out.println("operation timed out..calling them individually");
+			for(String s : symbols){
+				Promise<?> promise = feed.getLastEventPromise(Summary.class, s);
+				if(promise.awaitWithoutException(1, TimeUnit.SECONDS)){
+					addSummary((Summary)promise.getResult());
+				}
+				else{
+					System.out.println("failed to fetch summary for " + s);
+				}
+			}
 		}
 		else{
 			for(int i = 0; i < promises.size(); ++i){
 				// put the results in their respective ticker bins
 				Summary s = (Summary)promises.get(i).getResult();
-				String ticker = DXFeedUtils.getTicker(s.getEventSymbol());
-				try{
-					contractsMap.get(ticker).add(s);
-				}
-				catch(NullPointerException e){
-					System.out.println("error loading ticker");
-				}
+				addSummary(s);
 			}
-			// write this out to redis as hash
 		}
-		promises.clear();
+		symbols.clear();
+	}
+	
+	// write out the sumamry event to the redis hash
+	public static void addSummary(Summary s){
+		String ticker = DXFeedUtils.getTicker(s.getEventSymbol());
+		try{
+			contractsMap.get(ticker).add(s);
+		}
+		catch(NullPointerException e){
+			System.out.println("error loading ticker");
+		}
 	}
 	
 	public static void main(String[] args){
@@ -69,30 +86,29 @@ public class LoadOpenInterest {
 			CommandLine cmd = parser.parse(options, args);
 			if(cmd.hasOption("file")){
 				instrumentFile = cmd.getOptionValue("file");
-				DXFeed feed = DXFeed.getInstance();
 				BufferedReader reader = new BufferedReader(new FileReader(instrumentFile));
 				// it's going to be a very big list, might as well allocate up front
-				List<Promise<?>> promises = new ArrayList<Promise<?>>(INITIAL_CAPACITY);
+				List<String> symbols = new ArrayList<String>(BATCH_SIZE);
 
 				// discard first line with column headers
 				String line = reader.readLine();
 				int  i = 0;
 				while( (line = reader.readLine()) != null){
 					++i;
-					if(i % 1000 == 0){
-						processPromises(promises);
-					}
 					String[] columns = line.split(",");
 					if(!columns[MULTIPLIER_COLUMN].equals("100")) continue; // we're only interested in non-mini options
-					System.out.println(i + " " + columns[SYMBOL_COLUMN]);
+					if(i % BATCH_SIZE == 0){
+						System.out.println(i + " " + columns[SYMBOL_COLUMN]);
+						processPromises(symbols);
+					}
 					String root_symbol = DXFeedUtils.getTicker(columns[SYMBOL_COLUMN]);
 					if(!contractsMap.containsKey(root_symbol)) {
 						contractsMap.put(root_symbol, new ArrayList<Summary>());
 					}
-					promises.add(feed.getLastEventPromise(Summary.class, columns[SYMBOL_COLUMN]));
+					symbols.add(columns[SYMBOL_COLUMN]);
 				}
 				// process last set of promises
-				processPromises(promises);
+				processPromises(symbols);
 				for(String ticker : contractsMap.keySet()){
 					Map<String, String> oiMap = new HashMap<String, String>();
 					int date = 0;
@@ -115,6 +131,8 @@ public class LoadOpenInterest {
 						System.out.println("error getting summary event");
 					}
 				}
+				System.out.println("program completed successfully");
+				System.exit(0);
 			}
 			else{
 				System.out.println("instrument profile path must be specified with -f option");

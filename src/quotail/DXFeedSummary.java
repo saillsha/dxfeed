@@ -47,7 +47,7 @@ public class DXFeedSummary {
 				String line = reader.readLine();
 				HashSet<String> tickers = new HashSet<String>();
 				int  i =0;
-				promises.add(feed.getLastEventPromise(Summary.class, ".VER1160115C17.5"));
+				promises.add(feed.getLastEventPromise(Summary.class, ".VIEWF150918C2.5"));
 //				while( (line = reader.readLine()) != null/* && i < 10000*/){
 //					String[] columns = line.split(",");
 //					tickers.add(columns[TICKER_COLUMN]);
@@ -65,7 +65,7 @@ public class DXFeedSummary {
 //					outfile.println(ticker);
 //				}
 //				outfile.close();
-				if (!Promises.allOf(promises).awaitWithoutException(1, TimeUnit.SECONDS)){
+				if (!Promises.allOf(promises).awaitWithoutException(4, TimeUnit.SECONDS)){
 					System.out.println("operation timed out");
 				}
 				else{
