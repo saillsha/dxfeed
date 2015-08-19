@@ -57,6 +57,35 @@ public class Cluster {
 		}
 	}
 	
+	// attempt to find the trade in the internal trades array that matches the parameter. if found, remove and update aggregate information
+	public boolean cancelTrade(TimeAndSale t){
+		for(int i = 0; i < trades.size(); ++i){
+			TimeAndSale tns = trades.get(i);
+			if(tns.getSequence() == t.getSequence()){
+				// we've found the original trade, squash it
+				quantity -= tns.getSize();
+				money -= tns.getSize() * t.getPrice() * 100;
+				trades.remove(i);
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public boolean correctTrade(TimeAndSale t){
+		for(int i = 0; i < trades.size(); ++i){
+			TimeAndSale tns = trades.get(i);
+			if(tns.getSequence() == t.getSequence()){
+				// we've found the original trade,  update it
+				quantity = quantity - (int)tns.getSize() + (int)t.getSize();
+				money = money - (int)(tns.getSize() * tns.getPrice() * 100) + (int)(t.getSize() * t.getPrice() * 100);
+				trades.set(i, t);
+				return true;
+			}
+		}
+		return false;		
+	}
+	
 	public void classifyCluster(){
 		classification = trades.get(0).getAggressorSide();
 		double bid0 = trades.get(0).getBidPrice();

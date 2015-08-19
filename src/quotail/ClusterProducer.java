@@ -75,7 +75,8 @@ public class ClusterProducer implements Runnable {
     	if(jedis.exists(redisKey)){
     		String agg_vol = jedis.hmget(redisKey, hashKey).get(0);
     		agg_vol = agg_vol == null ? "0" : agg_vol;
-	    	int aggVol = Integer.parseInt(agg_vol) + (int)t.getSize();
+	    	long contractSize = t.isCancel() ? t.getSize() * -1 : ( t.isCorrection() ? 0 : t.getSize() );
+	    	long aggVol = contractSize + Integer.parseInt(agg_vol);
 	    	updatedVol.put(hashKey, "" + aggVol);
 	    	jedis.hmset(redisKey, updatedVol);
     	}
@@ -123,7 +124,21 @@ public class ClusterProducer implements Runnable {
        		    	symbol += ":spread";
        		    }
 		    	synchronized(clusterMap){
-    		    	if(!clusterMap.containsKey(symbol)){
+//		    		if(t.isCancel() && clusterMap.containsKey(symbol)){
+//		    			Cluster cluster = clusterMap.get(symbol);
+//		    			if(clusterMap.get(symbol).cancelTrade(t)){
+//		    				// if we were successfully able to eliminate the error at this stage, then
+//		    				// don't process the trade and move on. otherwise, it will need to be sent
+//		    				// further down the pipeline
+//		    				continue;
+//		    			}
+//		    		}
+//		    		else if(t.isCorrection() && clusterMap.containsKey(symbol)){
+//		    			if(clusterMap.get(symbol).correctTrade(t)){
+//		    				continue;
+//		    			}
+//		    		}
+		    		if(!clusterMap.containsKey(symbol)){
     		    		// create new cluster for this trade if none exists yet for the contract
     		    		createCluster(t, symbol, ticker, contractVol);
 	    		    }

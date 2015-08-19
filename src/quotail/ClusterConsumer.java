@@ -32,7 +32,8 @@ public class ClusterConsumer implements Runnable{
     private final int CLUSTER_QUANTITY_THRESHOLD = 50;
     private final int CLUSTER_MONEY_THRESHOLD = 50000;
     private final long SUMMARY_TIMEOUT = 500;
-	
+	private final String TOPIC = "clusters";
+    
     public ClusterConsumer(LinkedBlockingDeque<Cluster> clusterQueue, Map<String, Cluster> clusterMap, SpreadTracker spreadTracker, String clusterFile){
 		this.clusterQueue = clusterQueue;
 		this.clusterMap = clusterMap;
@@ -118,7 +119,7 @@ public class ClusterConsumer implements Runnable{
 	    		if(summaryPromise.awaitWithoutException(SUMMARY_TIMEOUT, TimeUnit.MILLISECONDS)){
 		    		cluster.openinterest = summaryPromise.getResult().getOpenInterest();
 	    		}
-//	    		Promise<Trade> tradePromise = feed.getLastEventPromise(Trade.class, denormalizedSymbol);
+	    		Promise<Trade> tradePromise = feed.getLastEventPromise(Trade.class, denormalizedSymbol);
 //	    		if(tradePromise.awaitWithoutException(SUMMARY_TIMEOUT, TimeUnit.MILLISECONDS)){
 //	    			cluster.volume = (int)tradePromise.getResult().getDayVolume();
 //	    		}
@@ -174,7 +175,7 @@ public class ClusterConsumer implements Runnable{
 		}
 		if(isSpreadProcessed && bin.legs.size() > 0){
 			System.out.println("Spread PROCESSED: " + spreadStr);
-			KeyedMessage<String, String> message = new KeyedMessage<String, String>("clusters", ticker, spreadStr);
+			KeyedMessage<String, String> message = new KeyedMessage<String, String>(TOPIC, ticker, spreadStr);
 			producer.send(message);
     		if(clusterOut != null){
     			synchronized(clusterOut){
