@@ -1,12 +1,9 @@
 package quotail;
 
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -24,7 +21,6 @@ import com.dxfeed.event.market.Summary;
 import com.dxfeed.promise.Promise;
 import com.dxfeed.promise.Promises;
 import com.dxfeed.api.DXFeed;
-import com.dxfeed.api.DXFeedSubscription;
 
 public class LoadOpenInterest {
 	static final int BATCH_SIZE = 1000;
@@ -109,6 +105,7 @@ public class LoadOpenInterest {
 				}
 				// process last set of promises
 				processPromises(symbols);
+				// create hash map to upload to redis
 				for(String ticker : contractsMap.keySet()){
 					Map<String, String> oiMap = new HashMap<String, String>();
 					int date = 0;
