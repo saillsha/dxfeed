@@ -132,7 +132,7 @@ public class Cluster {
 		sb.append(",\"side\":");
 		sb.append(this.classification == Side.BUY ? "\"B\"" : (this.classification == Side.SELL ? "\"S\"" : "\"U\""));
 		sb.append(",\"oi\":");
-		sb.append(this.openinterest);
+		sb.append(this.openinterest >= 0 ? this.openinterest : null);
 		sb.append(",\"volume\":");
 		sb.append(this.volume);
 		sb.append(",\"time\":");
