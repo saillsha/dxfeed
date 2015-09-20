@@ -26,6 +26,7 @@ public class DXFeedUtils {
     
     public static TimeAndSale parseTrade(String line){
     	if(line == null) return null;
+    	System.out.println("line not null");
     	String[] fields = line.split(""+DELIM);
     	if(fields.length == 0) return null;
 
@@ -37,10 +38,10 @@ public class DXFeedUtils {
     	t.setPrice(Double.parseDouble(fields[5]));
     	t.setBidPrice(Double.parseDouble(fields[6]));
     	t.setAskPrice(Double.parseDouble(fields[7]));
-    	t.setAggressorSide(fields[8].equals("BUY") ? Side.BUY : (fields[9].equals("SELL") ? Side.SELL : Side.UNDEFINED));
+    	t.setAggressorSide(fields[8].equals("BUY") ? Side.BUY : (fields[8].equals("SELL") ? Side.SELL : Side.UNDEFINED));
     	t.setSpreadLeg(fields[9].equals("true"));
     	t.setType(TimeAndSaleType.NEW);
-    	if(fields.length == 11){
+    	if(fields.length >= 11){
     		if(fields[10].equals("CANCEL"))
     			t.setType(TimeAndSaleType.CANCEL);
     		else if(fields[10].equals("CORRECTION"))

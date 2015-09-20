@@ -27,9 +27,14 @@ public class FetchDailyCandles {
 		long toTime = System.currentTimeMillis();
 		long fromTime = toTime - DAYS * TimeUtil.DAY;
 		System.out.printf("Fetching last %d days of candles for %s...%n", DAYS, baseSymbol);
+
 		try {
 			fetchAndPrint(candleSymbol, toTime, fromTime);
-		} finally {
+		}catch(Exception e){
+			System.out.println(e);
+			System.exit(0);
+		}
+		finally {
 			System.exit(0); // Exit when done
 		}
 	}

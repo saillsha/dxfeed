@@ -101,18 +101,18 @@ public class ClusterProducer implements Runnable {
 	         	ByteArrayInputStream in = new ByteArrayInputStream(serializedTrade);
     		    ObjectInputStream is = new ObjectInputStream(in);
     		    t = (TimeAndSale)is.readObject();
-
+    		    // continue if invalid trade of size 0 or drainqueue flag is on
+    		    if(t.getSize() == 0 || TradesConsumer.drainQueue){
+    		    	System.out.println(t);
+    		    	continue;
+    		    }
+    		    
     		    symbol = t.getEventSymbol();
     		    ticker = DXFeedUtils.getTicker(symbol);
     		    long contractVol = 0;
     		    // update redis with aggregate counts
     		    if(TradesConsumer.updateRedis){
     		    	updateRedisAggVol(t, ticker);
-    		    }
-    		    // continue if invalid trade of size 0 or drainqueue flag is on
-    		    if(t.getSize() == 0 || TradesConsumer.drainQueue){
-    		    	System.out.println(t);
-    		    	continue;
     		    }
 
        		    if(contractVolMap.containsKey(symbol)){
