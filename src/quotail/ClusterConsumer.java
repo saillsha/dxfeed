@@ -39,13 +39,15 @@ public class ClusterConsumer implements Runnable{
 	private final String TOPIC = "clusters";
 	private SimpleDateFormat df = new SimpleDateFormat("yyyyMMdd");
 
-	private Jedis jedis;
+	private Jedis cache_client;
+	private Jedis pubsub_client = new Jedis("localhost", 6380);
     public ClusterConsumer(LinkedBlockingDeque<Cluster> clusterQueue, Map<String, Cluster> clusterMap, SpreadTracker spreadTracker, String clusterFile){
 		this.clusterQueue = clusterQueue;
 		this.clusterMap = clusterMap;
 		this.spreadTracker = spreadTracker;
-		jedis = ClusterProducer.jedisPool.getResource();
-    	if(producer == null)
+		cache_client = ClusterProducer.jedisPool.getResource();
+
+		if(producer == null)
     		configureKafkaProducer();
 		try{
         	if(clusterFile != null){
@@ -124,7 +126,7 @@ public class ClusterConsumer implements Runnable{
 				cluster.classifyCluster();
 				String denormalizedSymbol = DXFeedUtils.denormalizeContract(symbol);
 				Date d = new Date(cluster.trades.get(0).getTime());
-				String oi = jedis.hmget(df.format(d) + "_" + ticker + "_oi", contractSymbol).get(0);
+				String oi = cache_client.hmget(df.format(d) + "_" + ticker + "_oi", contractSymbol).get(0);
 				System.out.println(contractSymbol + "\t" + oi);
 				cluster.openinterest = oi.equals("null") ? -1 : Integer.parseInt(oi);
 	    		cluster.volume += cluster.quantity;
@@ -133,9 +135,10 @@ public class ClusterConsumer implements Runnable{
 	    			processSpreadLeg(cluster, ticker);
 	    		}
 	    		else{
-	    			KeyedMessage<String, String> message = new KeyedMessage<String, String>("clusters", DXFeedUtils.getTicker(symbol), "[" + cluster.toJSON() + "]");
-	    			producer.send(message);
-		    		if(clusterOut != null){
+//	    			KeyedMessage<String, String> message = new KeyedMessage<String, String>("clusters", DXFeedUtils.getTicker(symbol), "[" + cluster.toJSON() + "]");
+//	    			producer.send(message);
+	    			pubsub_client.publish("dev_rawClusters", "[" + cluster.toJSON() + "]");
+	    			if(clusterOut != null){
 		    			synchronized(clusterOut){
 			    			// write out cluster to file
 			    			clusterOut.println("[" + cluster.toJSON() + "]");
@@ -179,9 +182,10 @@ public class ClusterConsumer implements Runnable{
 		}
 		if(isSpreadProcessed && bin.legs.size() > 0){
 			System.out.println("Spread PROCESSED: " + spreadStr);
-			KeyedMessage<String, String> message = new KeyedMessage<String, String>(TOPIC, ticker, spreadStr);
-			producer.send(message);
-    		if(clusterOut != null){
+//			KeyedMessage<String, String> message = new KeyedMessage<String, String>(TOPIC, ticker, spreadStr);
+//			producer.send(message);
+			pubsub_client.publish("dev_rawClusters", spreadStr);
+			if(clusterOut != null){
     			synchronized(clusterOut){
 	    			// write out cluster to file
 	    			clusterOut.println(spreadStr);
