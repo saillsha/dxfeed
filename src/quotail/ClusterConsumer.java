@@ -4,11 +4,16 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.text.SimpleDateFormat;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
+import java.util.Date;
 import java.util.Map;
 import java.util.Properties;
 
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.JedisPoolConfig;
 import kafka.javaapi.producer.Producer;
 import kafka.producer.KeyedMessage;
 import kafka.producer.ProducerConfig;
@@ -29,15 +34,17 @@ public class ClusterConsumer implements Runnable{
 	private LinkedBlockingDeque<Cluster> clusterQueue;
 	private final int CLUSTER_WAIT_TIME = 400;
 	private final int CLUSTER_TIMEOUT = 2000;
-    private final int CLUSTER_QUANTITY_THRESHOLD = 50;
+    private final int CLUSTER_QUANTITY_THRESHOLD = 100;
     private final int CLUSTER_MONEY_THRESHOLD = 50000;
-    private final long SUMMARY_TIMEOUT = 500;
 	private final String TOPIC = "clusters";
-    
+	private SimpleDateFormat df = new SimpleDateFormat("yyyyMMdd");
+
+	private Jedis jedis;
     public ClusterConsumer(LinkedBlockingDeque<Cluster> clusterQueue, Map<String, Cluster> clusterMap, SpreadTracker spreadTracker, String clusterFile){
 		this.clusterQueue = clusterQueue;
 		this.clusterMap = clusterMap;
 		this.spreadTracker = spreadTracker;
+		jedis = ClusterProducer.jedisPool.getResource();
     	if(producer == null)
     		configureKafkaProducer();
 		try{
@@ -103,6 +110,7 @@ public class ClusterConsumer implements Runnable{
 	public void processCluster(Cluster cluster){
 		cluster.isProcessed = true;
 		String symbol = cluster.trades.getFirst().getEventSymbol();
+		String contractSymbol = symbol;
 		String ticker = DXFeedUtils.getTicker(symbol);
 		if(cluster.isSpreadLeg){
 			symbol += ":spread";
@@ -115,14 +123,10 @@ public class ClusterConsumer implements Runnable{
     		if(cluster.quantity >= CLUSTER_QUANTITY_THRESHOLD){
 				cluster.classifyCluster();
 				String denormalizedSymbol = DXFeedUtils.denormalizeContract(symbol);
-	    		Promise<Summary> summaryPromise = feed.getLastEventPromise(Summary.class, denormalizedSymbol);
-	    		if(summaryPromise.awaitWithoutException(SUMMARY_TIMEOUT, TimeUnit.MILLISECONDS)){
-		    		cluster.openinterest = summaryPromise.getResult().getOpenInterest();
-	    		}
-	    		Promise<Trade> tradePromise = feed.getLastEventPromise(Trade.class, denormalizedSymbol);
-//	    		if(tradePromise.awaitWithoutException(SUMMARY_TIMEOUT, TimeUnit.MILLISECONDS)){
-//	    			cluster.volume = (int)tradePromise.getResult().getDayVolume();
-//	    		}
+				Date d = new Date(cluster.trades.get(0).getTime());
+				String oi = jedis.hmget(df.format(d) + "_" + ticker + "_oi", contractSymbol).get(0);
+				System.out.println(contractSymbol + "\t" + oi);
+				cluster.openinterest = oi.equals("null") ? -1 : Integer.parseInt(oi);
 	    		cluster.volume += cluster.quantity;
     			System.out.println("CLUSTER FOUND (" + elapsedTime(cluster) + "ms) [" + cluster.toJSON() + "]");
 	    		if(cluster.isSpreadLeg){
