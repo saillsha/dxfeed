@@ -57,7 +57,7 @@ public class DXFeedSummary {
 				String outFileName = "trades_" + cmd.getOptionValue("date");
 				if(cmd.hasOption("outfile"))
 					outFileName = cmd.getOptionValue("outfile");
-//        		fileOut = new PrintWriter(new BufferedWriter(new FileWriter(outFileName)));
+        		fileOut = new PrintWriter(new BufferedWriter(new FileWriter(outFileName)));
 				instrumentFile = cmd.getOptionValue("file");
 				DateFormat df = new SimpleDateFormat("yyyyMMdd");
 				fromTime = df.parse(cmd.getOptionValue("date")).getTime();
@@ -99,9 +99,9 @@ public class DXFeedSummary {
 		DXFeedTimeSeriesSubscription<TimeAndSale> timeSeriesSub = feed.createTimeSeriesSubscription(TimeAndSale.class);
 		timeSeriesSub.addEventListener(new TradeListener());
 		timeSeriesSub.setFromTime(fromTime);
-		String[] contracts = {".TSLA150918C260"};
+//		String[] contracts = {".TSLA150918C260"};
 		System.out.println("NUMBER OF SYMBOLS " + symbols.size());
-		timeSeriesSub.addSymbols(contracts);
+		timeSeriesSub.addSymbols(symbols);
 	}
 	
 	public class TradeListener implements DXFeedEventListener<TimeAndSale>{
@@ -109,18 +109,17 @@ public class DXFeedSummary {
 		int counter = 0;
 		public void eventsReceived(List<TimeAndSale> events) {
 			for (TimeAndSale event : events){
-				System.out.println(event);
-				counter++;
 				if(event.getTime() < toTime){
-					event.setEventSymbol(DXFeedUtils.normalizeContract(event.getEventSymbol()));
-//					fileOut.println(DXFeedUtils.serializeTrade(event));
+					String eventSymbol = DXFeedUtils.normalizeContract(event.getEventSymbol());
+					event.setEventSymbol(eventSymbol);
+					fileOut.println(DXFeedUtils.serializeTrade(event));
 					System.out.println(event);
 				}
-//				if(counter++ % 1000 == 0){
-//					fileOut.flush();
-//				}
+				if(counter++ % 1000 == 0){
+					fileOut.flush();
+				}
 			}
-			System.out.println(counter);
+//			System.out.println(counter);
 		}
 	}
 }

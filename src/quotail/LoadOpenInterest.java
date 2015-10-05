@@ -115,14 +115,12 @@ public class LoadOpenInterest {
 						String day = "" + date;
 						day = day.substring(0, 4) + "-" + day.substring(4, 6) + "-" + day.substring(6);
 						String symbol = DXFeedUtils.normalizeContract(summary.getEventSymbol());
-						String json = String.format("{\"date\": \"%s\", \"symbol\": \"%s\", \"openinterest\": \"%d\"}",
-								day, symbol, summary.getOpenInterest());
-						oiMap.put(symbol, json);
+						oiMap.put(symbol, ""+summary.getOpenInterest());
 					}
 					counter += contractsMap.get(ticker).size();
 					System.out.println(counter + " " + ticker);
 					try{
-						jedis.hmset("" + date + "_" + ticker + "_chains", oiMap);
+						jedis.hmset("" + date + "_" + ticker + "_oi", oiMap);
 					}
 					catch(Exception e){
 						System.out.println("error getting summary event");
