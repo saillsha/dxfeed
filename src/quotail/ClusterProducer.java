@@ -22,20 +22,19 @@ import kafka.consumer.ConsumerIterator;
 import kafka.consumer.KafkaStream;
 
 public class ClusterProducer implements Runnable {
-	private static JedisPool jedisPool = new JedisPool(new JedisPoolConfig(), "localhost");
-
+	public static JedisPool jedisPool = new JedisPool(new JedisPoolConfig(), "localhost");
+	
     private static Calendar calendar = new GregorianCalendar();
-    private static final long REDIS_KEY_EXPIRY_TIME;
+    private static final int REDIS_KEY_EXPIRY_TIME = 24*60*60;
     private final int CLUSTER_WAIT_TIME = 400;
-    private final int CLUSTER_QUANTITY_THRESHOLD = 50;
-    static{
-    	// set expiry of redis keys to 9:00 of the following day
-    	calendar.add(Calendar.DATE, 1);
-		calendar.set(Calendar.HOUR, 9);
-		calendar.set(Calendar.MINUTE, 0);
-		calendar.set(Calendar.AM_PM, 0);
-    	REDIS_KEY_EXPIRY_TIME = calendar.getTimeInMillis();
-    }
+    private final int CLUSTER_QUANTITY_THRESHOLD = 100;
+//    static{
+//    	// set expiry of redis keys to 9:00 of the following day
+//    	calendar.add(Calendar.DATE, 1);
+//		calendar.set(Calendar.HOUR, 9);
+//		calendar.set(Calendar.MINUTE, 0);
+//		calendar.set(Calendar.AM_PM, 0);
+//    }
 
 	private KafkaStream m_stream;
     private int m_threadNumber;
@@ -79,12 +78,13 @@ public class ClusterProducer implements Runnable {
 	    	long aggVol = contractSize + Integer.parseInt(agg_vol);
 	    	updatedVol.put(hashKey, "" + aggVol);
 	    	jedis.hmset(redisKey, updatedVol);
+	    	jedis.expire(redisKey, REDIS_KEY_EXPIRY_TIME);
     	}
 	    else{
 	    	updatedVol.putAll(aggVolMap);
 	    	updatedVol.put(hashKey, "" + t.getSize());
 	    	jedis.hmset(redisKey, updatedVol);
-	    	jedis.expireAt(redisKey, REDIS_KEY_EXPIRY_TIME);
+	    	jedis.expire(redisKey, REDIS_KEY_EXPIRY_TIME);
 	    }
     }
     
@@ -101,20 +101,19 @@ public class ClusterProducer implements Runnable {
 	         	ByteArrayInputStream in = new ByteArrayInputStream(serializedTrade);
     		    ObjectInputStream is = new ObjectInputStream(in);
     		    t = (TimeAndSale)is.readObject();
+    		    symbol = t.getEventSymbol();
+    		    ticker = DXFeedUtils.getTicker(symbol);
+    		    // update redis with aggregate counts
+    		    if(TradesConsumer.updateRedis){
+    		    	updateRedisAggVol(t, ticker);
+    		    }
     		    // continue if invalid trade of size 0 or drainqueue flag is on
     		    if(t.getSize() == 0 || TradesConsumer.drainQueue){
     		    	System.out.println(t);
     		    	continue;
     		    }
     		    
-    		    symbol = t.getEventSymbol();
-    		    ticker = DXFeedUtils.getTicker(symbol);
     		    long contractVol = 0;
-    		    // update redis with aggregate counts
-    		    if(TradesConsumer.updateRedis){
-    		    	updateRedisAggVol(t, ticker);
-    		    }
-
        		    if(contractVolMap.containsKey(symbol)){
        		    	contractVol = contractVolMap.get(symbol);
        		    }
