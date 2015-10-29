@@ -27,6 +27,7 @@ public class LoadOpenInterest {
 	static final int SYMBOL_COLUMN = 1;
 	static final int MULTIPLIER_COLUMN = 7;
 	static final int TICKER_COLUMN = 8;
+	static final int EXPIRATION = 24*60*60;
 	static HashMap<String, ArrayList<Summary>> contractsMap = new HashMap<String, ArrayList<Summary>>();
 	private static JedisPool jedisPool = new JedisPool(new JedisPoolConfig(), "localhost");
 	private static DXFeed feed = DXFeed.getInstance();
@@ -36,11 +37,11 @@ public class LoadOpenInterest {
 		for(String s : symbols){
 			promises.add(feed.getLastEventPromise(Summary.class, s));
 		}
-		if (!Promises.allOf(promises).awaitWithoutException(5, TimeUnit.SECONDS)){
+		if (!Promises.allOf(promises).awaitWithoutException(3, TimeUnit.SECONDS)){
 			System.out.println("operation timed out..calling them individually");
 			for(String s : symbols){
 				Promise<?> promise = feed.getLastEventPromise(Summary.class, s);
-				if(promise.awaitWithoutException(1, TimeUnit.SECONDS)){
+				if(promise.awaitWithoutException(200, TimeUnit.MILLISECONDS)){
 					addSummary((Summary)promise.getResult());
 				}
 				else{
@@ -120,7 +121,9 @@ public class LoadOpenInterest {
 					counter += contractsMap.get(ticker).size();
 					System.out.println(counter + " " + ticker);
 					try{
-						jedis.hmset("" + date + "_" + ticker + "_oi", oiMap);
+						String key = "" + date + "_" + ticker + "_oi";
+						jedis.hmset(key, oiMap);
+						jedis.expire(key, EXPIRATION);
 					}
 					catch(Exception e){
 						System.out.println("error getting summary event");
