@@ -64,29 +64,58 @@ public class ClusterProducer implements Runnable {
     	aggVolMap.put("PB", "0");
     	aggVolMap.put("PM", "0");
     }
-    
+
+    // update both aggregate ticker volume and contract volume
+    // ticker agg vol structure is  AAPL => {"CA": "593", "CB": "4818", "CM": "31", "PA": "1241", "PB": "83", "PM": "288"}
+    // contract agg vol structure is AAPL => {"AAPL151018C00125000": "B:203,A:312,M:21", ...}
     private void updateRedisAggVol(TimeAndSale t, String ticker){
 	    Date d = new Date(t.getTime());
 	    char optionType = t.getEventSymbol().substring(7).lastIndexOf('C') == -1 ? 'P' : 'C';
-    	String hashKey = optionType + (t.getAggressorSide() == Side.BUY ? "A" : (t.getAggressorSide() == Side.SELL ? "B" : "M"));
-    	String redisKey =  df.format(d) + "_" + ticker + "_agg_vol";
+	    char aggressorSide = t.getAggressorSide() == Side.BUY ? 'A' : (t.getAggressorSide() == Side.SELL ? 'B' : 'M');
+
+	    String tickerHashKey = "" + optionType + aggressorSide;
+	    String contractHashKey = DXFeedUtils.normalizeContract(t.getEventSymbol());
+    	String tickerVolKey =  df.format(d) + "_" + ticker + "_agg_vol";
+    	String contractVolKey = df.format(d) + "_" + ticker + "_contract_vol";
     	Map<String, String> updatedVol = new HashMap<String, String>();
-    	if(jedis.exists(redisKey)){
-    		String agg_vol = jedis.hmget(redisKey, hashKey).get(0);
+    	Map<String, String> updatedContractVol = new HashMap<String, String>();
+    	// update ticker aggregate volume
+    	if(jedis.exists(tickerVolKey)){
+    		String agg_vol = jedis.hmget(tickerVolKey, tickerHashKey).get(0);
     		agg_vol = agg_vol == null ? "0" : agg_vol;
 	    	long contractSize = t.isCancel() ? t.getSize() * -1 : ( t.isCorrection() ? 0 : t.getSize() );
 	    	long aggVol = contractSize + Integer.parseInt(agg_vol);
-	    	updatedVol.put(hashKey, "" + aggVol);
-	    	jedis.hmset(redisKey, updatedVol);
-	    	jedis.expire(redisKey, REDIS_KEY_EXPIRY_TIME);
+	    	updatedVol.put(tickerHashKey, "" + aggVol);
+	    	jedis.hmset(tickerVolKey, updatedVol);
+	    	jedis.expire(tickerVolKey, REDIS_KEY_EXPIRY_TIME);
     	}
 	    else{
 	    	updatedVol.putAll(aggVolMap);
-	    	updatedVol.put(hashKey, "" + t.getSize());
-	    	jedis.hmset(redisKey, updatedVol);
-	    	jedis.expire(redisKey, REDIS_KEY_EXPIRY_TIME);
+	    	updatedVol.put(tickerHashKey, "" + t.getSize());
+	    	jedis.hmset(tickerVolKey, updatedVol);
+	    	jedis.expire(tickerVolKey, REDIS_KEY_EXPIRY_TIME);
 	    }
+
+    	// update contract aggregate volume
+		long contractSize = t.isCancel() ? t.getSize() * -1 : (t.isCorrection() ? 0 : t.getSize());
+		String contractVol = "B:0,A:0,M:0";
+    	if(jedis.exists(contractVolKey)){
+    		String currentVol = jedis.hmget(contractVolKey, contractHashKey).get(0);
+    		if(currentVol != null){
+    			contractVol = currentVol;
+        		for(String s : currentVol.split(",")){
+        			if(aggressorSide == s.charAt(0)){
+        				contractSize += Long.parseLong(s.split(":")[1]);
+        			}
+        		}    			
+    		}
+    	}
+		contractVol = contractVol.replaceFirst(aggressorSide + ":[0-9]+", aggressorSide + ":" + contractSize);
+		updatedContractVol.put(contractHashKey, contractVol);
+		jedis.hmset(contractVolKey, updatedContractVol);
+		jedis.expire(contractVolKey, REDIS_KEY_EXPIRY_TIME);
     }
+   
     
     public void run() {
     	System.out.println("starting thread..." + m_threadNumber);
